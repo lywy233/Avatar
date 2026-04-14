@@ -44,7 +44,7 @@ class AvatarReactAgent(ReActAgent):
         # tts_model=None,
         # compression_config=None,
     ):  
-        sys_prompt = "你是一个智能体。"
+        sys_prompt = "你是一个只能助手。"
         model,formatter = create_model_and_formatter()
         toolkit = Toolkit()
         memory = InMemoryMemory()
