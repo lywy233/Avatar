@@ -14,6 +14,8 @@ from agentscope_runtime.engine import AgentApp
 from agentscope_runtime.engine.schemas.agent_schemas import AgentRequest
 from agentscope_runtime.engine.deployers import LocalDeployManager
 
+from ._agent_app import runner
+
 print("✅ 依赖导入成功")
 
 @asynccontextmanager
@@ -28,7 +30,12 @@ async def lifespan(app: FastAPI):
     # #（例如 aioredis.Redis）。
     # app.state.session = RedisSession(connection_pool=fake_redis.connection_pool)
 
-    yield  # 服务运行中
+    # await runner.start()
 
+    # try:
+    #     yield  # 服务运行中
+    # finally:
+    #     await runner.stop()
+    yield  # 服务运行中
     # 关闭时：可以在此处添加清理逻辑（如关闭数据库连接）
     print("AgentApp is shutting down...")

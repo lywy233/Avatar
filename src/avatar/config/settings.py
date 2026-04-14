@@ -35,7 +35,7 @@ class Settings(BaseSettings):
         description="Base URL for an OpenAI-compatible API endpoint, such as a proxy or self-hosted gateway.",
     )
     model_stream: bool = Field(
-        default=False,
+        default=True,
         description="Whether the default AgentScope chat model should stream responses.",
     )
 

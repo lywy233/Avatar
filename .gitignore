@@ -91,7 +91,8 @@ AGENTS.md
 openspec
 CLAUDE.md
 *.tmp
-.opencode
+.agents/
+skills-lock.json
 
 # Build cache
 .cache/  # Includes conda_unpack_wheels/ for Windows packaging workaround
