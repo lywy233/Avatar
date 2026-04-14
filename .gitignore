@@ -109,4 +109,5 @@ src/.hypothesis/
 .worktrees/
 
 reference_codes/
+.avatar/
 

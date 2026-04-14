@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import click
 
+from avatar.config import get_settings
+
 
 @click.command("app")
 @click.option(
@@ -12,8 +14,8 @@ import click
 )
 @click.option(
     "--port",
-    default=8000,
-    show_default=True,
+    default=None,
+    show_default="from AVATAR_PORT or 8000",
     type=int,
     help="Port used by the FastAPI server.",
 )
@@ -22,7 +24,7 @@ import click
     is_flag=True,
     help="Enable auto reload for local development.",
 )
-def app_cmd(host: str, port: int, reload: bool) -> None:
+def app_cmd(host: str, port: int | None, reload: bool) -> None:
     """Start the Avatar FastAPI application.
 
     FastAPI and Uvicorn are imported inside the command so the top-level CLI
@@ -35,10 +37,15 @@ def app_cmd(host: str, port: int, reload: bool) -> None:
             "uvicorn is required to run `avatar app`.",
         ) from exc
 
-    from avatar.app import create_app
-
-    app = create_app()
+    settings = get_settings()
+    resolved_port = settings.port if port is None else port
 
     # Use the in-process app object directly. This is the smallest working
     # setup and is enough for a simple local service entrypoint.
-    uvicorn.run(app, host=host, port=port, reload=reload)
+    uvicorn.run(
+        "avatar.app._app:app",
+        host=host,
+        port=resolved_port,
+        reload=reload,
+        # reload_excludes=["reference_codes/**"], # 无效,根本起不来
+    )
