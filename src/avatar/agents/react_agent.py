@@ -10,6 +10,8 @@ from agentscope.message import Msg
 from agentscope.model import ChatModelBase
 from agentscope.tool import Toolkit
 
+from avatar.agents.tools import get_weather
+
 from .model_factory import create_model_and_formatter
 
 ToolFunc = Callable[..., Any]
@@ -47,6 +49,11 @@ class AvatarReactAgent(ReActAgent):
         sys_prompt = "你是一个智能助手。"
         model,formatter = create_model_and_formatter()
         toolkit = Toolkit()
+        
+        toolkit.register_tool_function(
+            get_weather
+        )
+        
         memory = InMemoryMemory()
         max_iters = 10
         super().__init__(

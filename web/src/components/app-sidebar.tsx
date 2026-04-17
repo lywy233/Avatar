@@ -39,6 +39,11 @@ const navigationItems: NavigationItem[] = [
     icon: MessageSquareIcon,
   },
   {
+    title: 'Chat test',
+    to: '/ChatTest',
+    icon: MessageSquareIcon,
+  },
+  {
     title: 'Test route',
     to: '/test/test1',
     icon: FlaskConicalIcon,
@@ -101,7 +106,7 @@ export function AppSidebar({ appVersion }: AppSidebarProps) {
             v{appVersion}
           </Badge>
           <p className="text-xs leading-5 text-sidebar-foreground/70">
-            Official shadcn sidebar primitives now link the home shell, AgentScope chat, and sandbox route.
+            Official shadcn sidebar primitives now link the home shell, AgentScope chat, ChatTest, and sandbox route.
           </p>
         </div>
       </SidebarFooter>
