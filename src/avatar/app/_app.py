@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Union
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from agentscope.message import Msg
@@ -18,6 +18,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from avatar.agents import AvatarReactAgent
 from ._lifespan import lifespan
 from ._agent_app import agent_app
+from .auth.dependencies import get_current_user
+from .router.auth_router import router as auth_router
+from .router.file_system_router import router as file_system_router
+from .router.model_provider_router import router as model_provider_router
+from .router.skills_hub_router import router as skills_hub_router
 
 app = FastAPI(
     lifespan=lifespan,
@@ -52,6 +57,7 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+# 临时处理，仅仅为了防止页面报错
 @app.get("/get_example_agent_request")
 async def get_example_agent_request(
     request_data: AgentRequest,
@@ -63,5 +69,29 @@ async def get_example_agent_request(
 app.include_router(
     agent_app.router,
     prefix="/api/agent",
+    dependencies=[Depends(get_current_user)],
     # tags=["agent"],
+)
+
+app.include_router(
+    auth_router,
+    prefix="/api/auth",
+)
+
+app.include_router(
+    skills_hub_router,
+    prefix="/api/skills-hub",
+    dependencies=[Depends(get_current_user)],
+)
+
+app.include_router(
+    file_system_router,
+    prefix="/api/file-system",
+    dependencies=[Depends(get_current_user)],
+)
+
+app.include_router(
+    model_provider_router,
+    prefix="/api/model-provider",
+    dependencies=[Depends(get_current_user)],
 )

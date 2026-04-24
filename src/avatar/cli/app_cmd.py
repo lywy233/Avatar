@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import click
 
-from avatar.config import get_settings
+from avatar.config import get_app_config
 
 
 @click.command("app")
@@ -37,8 +37,8 @@ def app_cmd(host: str, port: int | None, reload: bool) -> None:
             "uvicorn is required to run `avatar app`.",
         ) from exc
 
-    settings = get_settings()
-    resolved_port = settings.port if port is None else port
+    app_config = get_app_config()
+    resolved_port = app_config.port if port is None else port
 
     # Use the in-process app object directly. This is the smallest working
     # setup and is enough for a simple local service entrypoint.

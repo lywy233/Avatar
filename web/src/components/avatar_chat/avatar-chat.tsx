@@ -1,5 +1,13 @@
 import { useEffect, useRef } from 'react'
-import { ArrowUpIcon, BotIcon, SparklesIcon } from 'lucide-react'
+import {
+  ArrowUpIcon,
+  BotIcon,
+  LoaderCircleIcon,
+  PaperclipIcon,
+  PlusIcon,
+  SparklesIcon,
+  XIcon,
+} from 'lucide-react'
 
 import { AvatarChatMessageItem } from '@/components/avatar_chat/avatar-chat-message'
 import {
@@ -36,16 +44,22 @@ export function AvatarChat({ endpoint, onError }: AvatarChatProps) {
     canRegenerate,
     draft,
     isLoading,
+    isUploading,
     lastAssistantMessageId,
     messages,
+    pendingAttachments,
     remainingCharacters,
+    removePendingAttachment,
     setDraft,
+    startNewConversation,
     stop,
     submit,
+    uploadFiles,
     regenerate,
   } = useAvatarChat({ endpoint, onError })
 
   const listRef = useRef<HTMLDivElement | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     listRef.current?.scrollTo({
@@ -100,28 +114,120 @@ export function AvatarChat({ endpoint, onError }: AvatarChatProps) {
             <span>Stored locally in this browser.</span>
           </div>
 
-          {canRegenerate && !isLoading ? (
-            <Button variant="ghost" size="sm" onClick={regenerate}>
-              <SparklesIcon data-icon="inline-start" />
-              Regenerate last answer
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={isUploading}
+              onClick={startNewConversation}
+            >
+              <PlusIcon data-icon="inline-start" />
+              New conversation
             </Button>
-          ) : null}
+
+            {canRegenerate && !isLoading ? (
+              <Button variant="ghost" size="sm" onClick={regenerate}>
+                <SparklesIcon data-icon="inline-start" />
+                Regenerate last answer
+              </Button>
+            ) : null}
+          </div>
         </div>
       </CardContent>
 
       <CardFooter className="flex flex-col items-stretch gap-4 border-t bg-muted/30">
         <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                disabled={isLoading || isUploading}
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <PaperclipIcon data-icon="inline-start" />
+                Add files
+              </Button>
+              {isUploading ? (
+                <Badge variant="outline">
+                  <LoaderCircleIcon data-icon="inline-start" className="animate-spin" />
+                  Uploading
+                </Badge>
+              ) : null}
+            </div>
+
+            <input
+              ref={fileInputRef}
+              className="hidden"
+              multiple
+              type="file"
+              onChange={(event) => {
+                const files = Array.from(event.target.files ?? [])
+                if (files.length > 0) {
+                  void uploadFiles(files)
+                }
+                event.target.value = ''
+              }}
+            />
+          </div>
+
+          {pendingAttachments.length > 0 ? (
+            <div className="grid gap-3 rounded-xl border bg-background p-3 sm:grid-cols-2">
+              {pendingAttachments.map((attachment) => (
+                <div key={attachment.id} className="flex flex-col gap-2 rounded-lg border p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{attachment.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {(attachment.size / 1024).toFixed(1)} KB
+                      </p>
+                    </div>
+                    <button
+                      className="rounded-full"
+                      type="button"
+                      onClick={() => removePendingAttachment(attachment.id)}
+                    >
+                      <XIcon className="size-4" />
+                    </button>
+                  </div>
+
+                  {attachment.mediaKind === 'image' ? (
+                    <img
+                      alt={attachment.name}
+                      className="max-h-48 rounded-lg border object-contain"
+                      src={attachment.previewUrl}
+                    />
+                  ) : null}
+
+                  {attachment.mediaKind === 'audio' ? (
+                    <audio className="w-full" controls src={attachment.previewUrl} />
+                  ) : null}
+
+                  {attachment.mediaKind === 'video' ? (
+                    <video className="max-h-48 w-full rounded-lg border" controls src={attachment.previewUrl} />
+                  ) : null}
+
+                  {attachment.mediaKind === 'file' ? (
+                    <Badge className="w-fit" variant="secondary">
+                      File ready to upload
+                    </Badge>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : null}
+
           <label className="sr-only" htmlFor="avatar-chat-test-input">
             Chat message
           </label>
           <textarea
             id="avatar-chat-test-input"
             className="min-h-24 w-full resize-y rounded-xl border border-input bg-background px-3 py-2 text-sm leading-6 outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={isLoading}
+            disabled={isLoading || isUploading}
             maxLength={avatarChatContract.maxLength}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
+              if (event.key === 'Enter' && !event.shiftKey && !isUploading) {
                 event.preventDefault()
                 void submit()
               }
@@ -142,7 +248,7 @@ export function AvatarChat({ endpoint, onError }: AvatarChatProps) {
                   Stop
                 </Button>
               ) : (
-                <Button onClick={() => void submit()}>
+                <Button disabled={isUploading} onClick={() => void submit()}>
                   <ArrowUpIcon data-icon="inline-start" />
                   Send
                 </Button>

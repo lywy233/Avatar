@@ -218,11 +218,22 @@ export interface AgentScopeRuntimeRequestInput {
 export interface AgentScopeRuntimeRequestPayload {
   /** Flattened runtime history array. */
   input: AgentScopeRuntimeRequestInput[]
+  /** Stable frontend-managed runtime session identifier. */
+  session_id?: string
   /** Optional user prompt parameters supported by the runtime endpoint. */
   biz_params?: {
     /** Prompt parameter key-value pairs. */
     user_prompt_params?: Record<string, string>
   }
+}
+
+/** Uploaded media metadata persisted by the local chat UI. */
+export interface AvatarChatAttachment {
+  relativePath: string
+  name: string
+  contentType: string
+  size: number
+  mediaKind: 'audio' | 'file' | 'image' | 'video'
 }
 
 /** Supported UI-level chat statuses for local message rendering. */
@@ -250,6 +261,8 @@ export interface AvatarChatMessage {
   text: string
   /** Unix timestamp for sort order and persistence. */
   createdAt: number
+  /** Uploaded media attached to this message. */
+  attachments?: AvatarChatAttachment[]
   /** User-side runtime request item used to rebuild history. */
   requestInput?: AgentScopeRuntimeRequestInput
   /** Assistant-side runtime response snapshot built from SSE chunks. */
@@ -258,12 +271,18 @@ export interface AvatarChatMessage {
   errorMessage?: string
 }
 
+/** In-memory single-session state used by the local chat playground. */
+export interface AvatarChatSessionState {
+  /** Stable runtime session id reused until the user starts over. */
+  sessionId: string
+  /** Current local chat messages for the active session. */
+  messages: AvatarChatMessage[]
+}
+
 /** Serialized single-session state written into localStorage. */
-export interface AvatarChatPersistedState {
+export interface AvatarChatPersistedState extends AvatarChatSessionState {
   /** Schema version for safe future migrations. */
   version: number
-  /** Current local chat messages for the single persisted session. */
-  messages: AvatarChatMessage[]
 }
 
 /** Parsed message emitted by the local SSE parser. */

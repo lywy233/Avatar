@@ -4,12 +4,17 @@ import { BotIcon, RefreshCcwIcon, SquareIcon, UserIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
+import {
+  getFileSystemDownloadUrl,
+  getFileSystemPreviewUrl,
+} from '@/lib/file-system-api'
 import { cn } from '@/lib/utils'
 import {
   AgentScopeRuntimeContentType,
   type AgentScopeRuntimeContent,
   type AgentScopeRuntimeMessage,
   AgentScopeRuntimeMessageType,
+  type AvatarChatAttachment,
   type AvatarChatMessage,
   AvatarChatMessageStatus,
 } from '@/components/avatar_chat/types'
@@ -75,7 +80,7 @@ export function AvatarChatMessageItem({
                   message={message}
                 />
               ) : (
-                <p className="whitespace-pre-wrap">{message.text}</p>
+                <UserMessageContent message={message} />
               )}
             </div>
 
@@ -101,6 +106,63 @@ export function AvatarChatMessageItem({
 
       {!isAssistant ? <AvatarGlyph isAssistant={false} /> : null}
     </div>
+  )
+}
+
+function UserMessageContent({ message }: { message: AvatarChatMessage }) {
+  const attachments = Array.isArray(message.attachments) ? message.attachments : []
+
+  return (
+    <div className="flex flex-col gap-3">
+      {message.text ? <p className="whitespace-pre-wrap">{message.text}</p> : null}
+      {attachments.length > 0 ? <UserAttachmentList attachments={attachments} /> : null}
+    </div>
+  )
+}
+
+function UserAttachmentList({ attachments }: { attachments: AvatarChatAttachment[] }) {
+  return (
+    <div className="flex flex-col gap-3">
+      {attachments.map((attachment) => (
+        <UserAttachmentItem key={attachment.relativePath} attachment={attachment} />
+      ))}
+    </div>
+  )
+}
+
+function UserAttachmentItem({ attachment }: { attachment: AvatarChatAttachment }) {
+  const previewUrl = getFileSystemPreviewUrl(attachment.relativePath)
+  const downloadUrl = getFileSystemDownloadUrl(attachment.relativePath)
+
+  if (attachment.mediaKind === 'image') {
+    return (
+      <a href={previewUrl} rel="noreferrer" target="_blank">
+        <img
+          alt={attachment.name}
+          className="max-h-64 rounded-xl border object-contain"
+          src={previewUrl}
+        />
+      </a>
+    )
+  }
+
+  if (attachment.mediaKind === 'audio') {
+    return <audio className="w-full" controls src={previewUrl} />
+  }
+
+  if (attachment.mediaKind === 'video') {
+    return <video className="max-h-80 w-full rounded-xl border" controls src={previewUrl} />
+  }
+
+  return (
+    <a
+      className="text-sm text-primary underline underline-offset-4"
+      href={downloadUrl}
+      rel="noreferrer"
+      target="_blank"
+    >
+      {attachment.name}
+    </a>
   )
 }
 

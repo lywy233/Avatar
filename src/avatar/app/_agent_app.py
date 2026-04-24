@@ -6,7 +6,12 @@
 from agentscope_runtime.engine.app import AgentApp
 
 from .runner import AgentRunner
-runner = AgentRunner()
+
+
+runner = AgentRunner() # 暂时使用单个runner进行处理，不知道会不会有性能问题
+
+
+
 agent_app = AgentApp(
     app_name="Avatar",
     app_description="A helpful assistant with background task support",

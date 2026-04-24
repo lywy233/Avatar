@@ -1,6 +1,7 @@
 import {
   AgentScopeRuntimeContentType,
   type AgentScopeRuntimeErrorMessageLike,
+  type AvatarChatAttachment,
   type AgentScopeRuntimeContent,
   type AgentScopeRuntimeDataContent,
   type AgentScopeRuntimeImageContent,
@@ -14,6 +15,10 @@ import {
   AvatarChatMessageStatus,
   type EventSourceMessage,
 } from '@/components/avatar_chat/types'
+import {
+  getFileSystemDownloadUrl,
+  getFileSystemPreviewUrl,
+} from '@/lib/file-system-api'
 
 const HEARTBEAT_MESSAGE_TYPES = new Set<AgentScopeRuntimeMessageType>([
   AgentScopeRuntimeMessageType.Heartbeat,
@@ -46,17 +51,66 @@ export function createLocalMessageId(): string {
 }
 
 /** Builds the user request item that matches the existing runtime input contract. */
-export function buildUserRequestInput(query: string): AgentScopeRuntimeRequestInput {
+export function buildUserRequestInput(
+  query: string,
+  attachments: AvatarChatAttachment[] = [],
+): AgentScopeRuntimeRequestInput {
+  const content: AgentScopeRuntimeContent[] = []
+
+  if (query.trim()) {
+    content.push({
+      type: AgentScopeRuntimeContentType.Text,
+      text: query,
+      status: AgentScopeRuntimeRunStatus.Created,
+    })
+  }
+
+  attachments.forEach((attachment) => {
+    const previewUrl = getFileSystemPreviewUrl(attachment.relativePath)
+    const downloadUrl = getFileSystemDownloadUrl(attachment.relativePath)
+
+    if (attachment.mediaKind === 'image') {
+      content.push({
+        type: AgentScopeRuntimeContentType.Image,
+        image_url: previewUrl,
+        status: AgentScopeRuntimeRunStatus.Created,
+      })
+      return
+    }
+
+    if (attachment.mediaKind === 'audio') {
+      content.push({
+        type: AgentScopeRuntimeContentType.Audio,
+        audio_url: previewUrl,
+        data: previewUrl,
+        format: attachment.name.split('.').pop(),
+        status: AgentScopeRuntimeRunStatus.Created,
+      })
+      return
+    }
+
+    if (attachment.mediaKind === 'video') {
+      content.push({
+        type: AgentScopeRuntimeContentType.Video,
+        video_url: previewUrl,
+        status: AgentScopeRuntimeRunStatus.Created,
+      })
+      return
+    }
+
+    content.push({
+      type: AgentScopeRuntimeContentType.File,
+      file_url: downloadUrl,
+      file_name: attachment.name,
+      file_size: attachment.size,
+      status: AgentScopeRuntimeRunStatus.Created,
+    })
+  })
+
   return {
     role: 'user',
     type: AgentScopeRuntimeMessageType.Message,
-    content: [
-      {
-        type: AgentScopeRuntimeContentType.Text,
-        text: query,
-        status: AgentScopeRuntimeRunStatus.Created,
-      },
-    ],
+    content,
   }
 }
 

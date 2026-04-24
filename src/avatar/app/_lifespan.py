@@ -15,8 +15,9 @@ from agentscope_runtime.engine.schemas.agent_schemas import AgentRequest
 from agentscope_runtime.engine.deployers import LocalDeployManager
 
 from ._agent_app import runner
-
-print("✅ 依赖导入成功")
+from .utils.logging import add_logging_file_handler,logging
+from ..config import get_app_config
+logger = logging.getLogger("avatar.lifespan")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -36,6 +37,9 @@ async def lifespan(app: FastAPI):
     #     yield  # 服务运行中
     # finally:
     #     await runner.stop()
+    add_logging_file_handler(get_app_config().log_path)
+    
+    logger.info("完成logger模块初始化")
     yield  # 服务运行中
     # 关闭时：可以在此处添加清理逻辑（如关闭数据库连接）
     print("AgentApp is shutting down...")

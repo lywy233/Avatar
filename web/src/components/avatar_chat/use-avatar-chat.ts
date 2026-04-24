@@ -13,14 +13,31 @@ import {
   mapRuntimeStatusToMessageStatus,
   mergeToolMessages,
 } from '@/components/avatar_chat/runtime'
-import { readAvatarChatSession, writeAvatarChatSession } from '@/components/avatar_chat/storage'
+import {
+  createAvatarChatSessionId,
+  readAvatarChatSession,
+  writeAvatarChatSession,
+} from '@/components/avatar_chat/storage'
 import {
   type AgentScopeRuntimeRequestPayload,
   type AgentScopeRuntimeResponse,
   AgentScopeRuntimeRunStatus,
+  type AvatarChatAttachment,
   type AvatarChatMessage,
   AvatarChatMessageStatus,
 } from '@/components/avatar_chat/types'
+import { authFetch } from '@/lib/auth-api'
+import { deleteMediaFile, uploadMediaFile } from '@/lib/file-system-api'
+
+type PendingAvatarChatAttachment = {
+  id: string
+  file: File
+  name: string
+  size: number
+  contentType: string
+  mediaKind: AvatarChatAttachment['mediaKind']
+  previewUrl: string
+}
 
 const MAX_LENGTH = 4000
 
@@ -54,7 +71,7 @@ export function createErrorHandlingFetch(
     let response: Response
 
     try {
-      response = await fetch(endpoint, {
+      response = await authFetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -118,10 +135,14 @@ type UseAvatarChatOptions = {
 
 /** Local chat controller for `/ChatTest` using SSE parsing and runtime response building. */
 export function useAvatarChat({ endpoint, onError }: UseAvatarChatOptions) {
+  const initialSessionState = useMemo(() => readAvatarChatSession(), [])
   const [draft, setDraft] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAvatarChatAttachment[]>([])
+  const [sessionId, setSessionId] = useState(initialSessionState.sessionId)
   const [messages, setMessages] = useState<AvatarChatMessage[]>(() =>
-    readAvatarChatSession().map((message) => {
+    initialSessionState.messages.map((message) => {
       if (message.status === AvatarChatMessageStatus.Generating) {
         return {
           ...message,
@@ -134,6 +155,8 @@ export function useAvatarChat({ endpoint, onError }: UseAvatarChatOptions) {
   )
 
   const messagesRef = useRef(messages)
+  const pendingAttachmentsRef = useRef<PendingAvatarChatAttachment[]>([])
+  const sessionIdRef = useRef(sessionId)
   const abortControllerRef = useRef<AbortController | null>(null)
   const activeAssistantIdRef = useRef<string | null>(null)
   const responseBuilderRef = useRef<AgentScopeRuntimeResponseBuilder | null>(null)
@@ -144,8 +167,24 @@ export function useAvatarChat({ endpoint, onError }: UseAvatarChatOptions) {
 
   useEffect(() => {
     messagesRef.current = messages
-    writeAvatarChatSession(messages)
-  }, [messages])
+    writeAvatarChatSession({ sessionId, messages })
+  }, [messages, sessionId])
+
+  useEffect(() => {
+    pendingAttachmentsRef.current = pendingAttachments
+  }, [pendingAttachments])
+
+  useEffect(() => {
+    sessionIdRef.current = sessionId
+  }, [sessionId])
+
+  useEffect(() => {
+    return () => {
+      pendingAttachmentsRef.current.forEach((attachment) => {
+        URL.revokeObjectURL(attachment.previewUrl)
+      })
+    }
+  }, [])
 
   const lastAssistantMessage = useMemo(() => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -162,6 +201,53 @@ export function useAvatarChat({ endpoint, onError }: UseAvatarChatOptions) {
   const updateMessages = useCallback((nextMessages: AvatarChatMessage[]) => {
     messagesRef.current = nextMessages
     setMessages(nextMessages)
+  }, [])
+
+  const uploadFiles = useCallback(
+    async (files: File[]) => {
+      if (files.length === 0) {
+        return
+      }
+
+      const nextAttachments = files.map((file) => ({
+        id: createLocalMessageId(),
+        file,
+        name: file.name,
+        size: file.size,
+        contentType: file.type || 'application/octet-stream',
+        mediaKind: classifyPendingMediaKind(file.type),
+        previewUrl: URL.createObjectURL(file),
+      }))
+
+      setPendingAttachments((currentAttachments) => [
+        ...currentAttachments,
+        ...nextAttachments,
+      ])
+    },
+    [],
+  )
+
+  const removePendingAttachment = useCallback((attachmentId: string) => {
+    setPendingAttachments((currentAttachments) => {
+      const attachmentToRemove = currentAttachments.find(
+        (attachment) => attachment.id === attachmentId,
+      )
+      if (attachmentToRemove) {
+        URL.revokeObjectURL(attachmentToRemove.previewUrl)
+      }
+
+      return currentAttachments.filter((attachment) => attachment.id !== attachmentId)
+    })
+  }, [])
+
+  const clearPendingAttachments = useCallback(() => {
+    setPendingAttachments((currentAttachments) => {
+      currentAttachments.forEach((attachment) => {
+        URL.revokeObjectURL(attachment.previewUrl)
+      })
+
+      return []
+    })
   }, [])
 
   const updateAssistantMessage = useCallback(
@@ -182,7 +268,11 @@ export function useAvatarChat({ endpoint, onError }: UseAvatarChatOptions) {
     [updateMessages],
   )
 
-  const finishRequest = useCallback(() => {
+  const finishRequest = useCallback((controller?: AbortController | null) => {
+    if (controller && abortControllerRef.current !== controller) {
+      return
+    }
+
     abortControllerRef.current = null
     activeAssistantIdRef.current = null
     responseBuilderRef.current = null
@@ -207,6 +297,7 @@ export function useAvatarChat({ endpoint, onError }: UseAvatarChatOptions) {
         const response = await requestRuntime(
           {
             input: buildHistoryInput(snapshotMessages),
+            session_id: sessionIdRef.current,
           },
           controller.signal,
         )
@@ -219,7 +310,7 @@ export function useAvatarChat({ endpoint, onError }: UseAvatarChatOptions) {
             text: extractMarkdownFromRuntimeResponse(finalizedResponse),
             status: mapRuntimeStatusToMessageStatus(finalizedResponse.status),
           }))
-          finishRequest()
+          finishRequest(controller)
           return
         }
 
@@ -291,7 +382,7 @@ export function useAvatarChat({ endpoint, onError }: UseAvatarChatOptions) {
           errorMessage,
         }))
       } finally {
-        finishRequest()
+        finishRequest(controller)
       }
     },
     [finishRequest, requestRuntime, updateAssistantMessage],
@@ -299,39 +390,73 @@ export function useAvatarChat({ endpoint, onError }: UseAvatarChatOptions) {
 
   const submit = useCallback(
     async (nextQuery?: string) => {
-      if (isLoading) {
+      if (isLoading || isUploading) {
         return
       }
 
       const query = (nextQuery ?? draft).trim()
-      if (!query) {
+      const attachments = pendingAttachments
+
+      if (!query && attachments.length === 0) {
         return
       }
 
-      const userMessage: AvatarChatMessage = {
-        id: createLocalMessageId(),
-        role: 'user',
-        status: AvatarChatMessageStatus.Finished,
-        text: query,
-        createdAt: Date.now(),
-        requestInput: buildUserRequestInput(query),
+      const uploadedAttachments: AvatarChatAttachment[] = []
+
+      try {
+        setIsUploading(true)
+
+        for (const attachment of attachments) {
+          uploadedAttachments.push(await uploadMediaFile(attachment.file, onError))
+        }
+        const userMessage: AvatarChatMessage = {
+          id: createLocalMessageId(),
+          role: 'user',
+          status: AvatarChatMessageStatus.Finished,
+          text: query,
+          createdAt: Date.now(),
+          attachments: uploadedAttachments,
+          requestInput: buildUserRequestInput(query, uploadedAttachments),
+        }
+
+        const assistantMessage: AvatarChatMessage = {
+          id: createLocalMessageId(),
+          role: 'assistant',
+          status: AvatarChatMessageStatus.Generating,
+          text: '',
+          createdAt: Date.now(),
+        }
+
+        const nextMessages = [...messagesRef.current, userMessage, assistantMessage]
+        updateMessages(nextMessages)
+        attachments.forEach((attachment) => {
+          URL.revokeObjectURL(attachment.previewUrl)
+        })
+        setDraft('')
+        setPendingAttachments([])
+        setIsUploading(false)
+
+        await streamAssistantResponse(nextMessages, assistantMessage.id)
+      } catch (error) {
+        if (uploadedAttachments.length > 0) {
+          await Promise.allSettled(
+            uploadedAttachments.map((attachment) => deleteMediaFile(attachment.relativePath)),
+          )
+        }
+
+        setIsUploading(false)
+        throw error
       }
-
-      const assistantMessage: AvatarChatMessage = {
-        id: createLocalMessageId(),
-        role: 'assistant',
-        status: AvatarChatMessageStatus.Generating,
-        text: '',
-        createdAt: Date.now(),
-      }
-
-      const nextMessages = [...messagesRef.current, userMessage, assistantMessage]
-      updateMessages(nextMessages)
-      setDraft('')
-
-      await streamAssistantResponse(nextMessages, assistantMessage.id)
     },
-    [draft, isLoading, streamAssistantResponse, updateMessages],
+    [
+      draft,
+      isLoading,
+      isUploading,
+      onError,
+      pendingAttachments,
+      streamAssistantResponse,
+      updateMessages,
+    ],
   )
 
   const stop = useCallback(() => {
@@ -402,18 +527,49 @@ export function useAvatarChat({ endpoint, onError }: UseAvatarChatOptions) {
     await streamAssistantResponse(nextMessages, nextAssistantMessage.id)
   }, [isLoading, streamAssistantResponse, updateMessages])
 
+  const startNewConversation = useCallback(() => {
+    abortControllerRef.current?.abort()
+
+    const nextSessionId = createAvatarChatSessionId()
+    sessionIdRef.current = nextSessionId
+
+    clearPendingAttachments()
+    setDraft('')
+    updateMessages([])
+    setSessionId(nextSessionId)
+    finishRequest()
+  }, [clearPendingAttachments, finishRequest, updateMessages])
+
   const remainingCharacters = avatarChatContract.maxLength - draft.length
 
   return {
     canRegenerate,
     draft,
+    isUploading,
     isLoading,
     lastAssistantMessageId: lastAssistantMessage?.id,
     messages,
+    pendingAttachments,
     remainingCharacters,
+    removePendingAttachment,
     setDraft,
+    startNewConversation,
     stop,
     submit,
+    uploadFiles,
     regenerate,
   }
+}
+
+function classifyPendingMediaKind(contentType: string): AvatarChatAttachment['mediaKind'] {
+  if (contentType.startsWith('image/')) {
+    return 'image'
+  }
+  if (contentType.startsWith('audio/')) {
+    return 'audio'
+  }
+  if (contentType.startsWith('video/')) {
+    return 'video'
+  }
+  return 'file'
 }

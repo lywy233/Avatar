@@ -24,4 +24,4 @@ logger = logging.getLogger(__name__)
 
 class CustomSession(JSONSession):
     def __init__(self):
-        super().__init__(save_dir = ".avatar/")
+        super().__init__(save_dir = ".avatar/sessions")

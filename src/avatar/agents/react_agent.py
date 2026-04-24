@@ -11,6 +11,7 @@ from agentscope.model import ChatModelBase
 from agentscope.tool import Toolkit
 
 from avatar.agents.tools import get_weather
+from avatar.config.runnning_config import get_running_config
 
 from .model_factory import create_model_and_formatter
 
@@ -55,7 +56,7 @@ class AvatarReactAgent(ReActAgent):
         )
         
         memory = InMemoryMemory()
-        max_iters = 10
+        max_iters = get_running_config().max_iters
         super().__init__(
             name,
             sys_prompt,

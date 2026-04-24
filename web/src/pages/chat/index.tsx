@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/sidebar'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useErrorHandler } from '@/hooks/use-error-handler'
+import { authFetch } from '@/lib/auth-api'
 
 const appVersion = import.meta.env.VITE_APP_VERSION ?? '0.0.0'
 const agentRuntimeBaseUrl = import.meta.env.VITE_AGENT_API_BASE_URL ?? '/api/agent/process'
@@ -32,7 +33,7 @@ const createErrorHandlingFetch = (onError: (title: string, message: string) => v
   }): Promise<Response> => {
     let response: Response
     try {
-      response = await fetch(agentRuntimeBaseUrl, {
+      response = await authFetch(agentRuntimeBaseUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

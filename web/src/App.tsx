@@ -35,8 +35,8 @@ const summaryCards = [
   },
   {
     label: 'Routes',
-    value: '3 active',
-    hint: 'The homepage shell now links the new /chat route alongside the existing sandbox path.',
+    value: '8 active',
+    hint: 'The homepage shell now links chat, ChatTest, Skills Hub, the file-system browser, Settings, the model provider editor, and the sandbox path.',
   },
 ] as const
 
@@ -129,12 +129,15 @@ function App() {
                   <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
                       The layout now starts from a durable app shell: left navigation, a clear top
-                      header, and a main panel ready for real dashboard content.
+                      header, and a main panel ready for real dashboard content including backend-backed settings pages.
                     </p>
 
                     <div className="flex flex-wrap gap-3">
                       <Button asChild>
                         <Link to="/chat">Open chat route</Link>
+                      </Button>
+                      <Button asChild variant="outline">
+                        <Link to="/settings">Open settings</Link>
                       </Button>
                       <Button asChild>
                         <Link to="/test/test1">Open test route</Link>
@@ -167,6 +170,26 @@ function App() {
                     <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
                       <span className="text-sm font-medium">/test/test1</span>
                       <Badge variant="outline">Preserved</Badge>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
+                      <span className="text-sm font-medium">/ChatTest</span>
+                      <Badge variant="outline">Local UI</Badge>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
+                      <span className="text-sm font-medium">/skills-hub</span>
+                      <Badge variant="outline">Catalog</Badge>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
+                      <span className="text-sm font-medium">/file-system</span>
+                      <Badge variant="outline">Browser</Badge>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
+                      <span className="text-sm font-medium">/settings</span>
+                      <Badge variant="outline">Media path</Badge>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
+                      <span className="text-sm font-medium">/model-provider</span>
+                      <Badge variant="outline">Running config</Badge>
                     </div>
                   </CardContent>
                 </Card>

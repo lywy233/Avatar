@@ -4,9 +4,8 @@ import os
 
 from agentscope.formatter import OpenAIChatFormatter
 from agentscope.model import OpenAIChatModel
-
-from avatar.config import get_settings
-
+from avatar.config import get_app_config
+from avatar.config.runnning_config import get_running_config
 
 def create_model_and_formatter() -> tuple[OpenAIChatModel, OpenAIChatFormatter]:
     """Create the default AgentScope model and formatter pair.
@@ -14,20 +13,23 @@ def create_model_and_formatter() -> tuple[OpenAIChatModel, OpenAIChatFormatter]:
     This minimal factory uses AgentScope's built-in OpenAI-compatible chat
     model and matching formatter directly.
     """
+    
+    current_running_config = get_running_config()
+    model_provider_config = current_running_config.model_provider_config
+    api_key = model_provider_config.api_key,
+    base_url = model_provider_config.base_url
+    model_name = model_provider_config.model_name
 
-    settings = get_settings()
-    api_key = settings.api_key or os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise ValueError(
-            "Missing API key for the default AgentScope model. "
-            "Set AVATAR_API_KEY or OPENAI_API_KEY before creating the agent.",
-        )
+    client_kwargs = {
+        "base_url": base_url
+    }
+    client_kwargs.update(model_provider_config.extra_config)
 
     model = OpenAIChatModel(
-        model_name=settings.model_name,
+        model_name=model_name,
         api_key=api_key,
-        stream=settings.model_stream,
-        client_kwargs={"base_url": settings.base_url} if settings.base_url else None,
+        stream=True,
+        client_kwargs=client_kwargs
     )
     formatter = OpenAIChatFormatter()
     return model, formatter

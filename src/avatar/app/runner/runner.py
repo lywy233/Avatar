@@ -35,6 +35,7 @@ from agentscope.session import RedisSession
 from agentscope_runtime.engine import AgentApp
 from agentscope_runtime.engine.schemas.agent_schemas import AgentRequest
 from agentscope_runtime.engine.deployers import LocalDeployManager
+from avatar.config.runnning_config import RunningConfig, set_running_config
 
 print("✅ 依赖导入成功")
 
@@ -65,6 +66,16 @@ class AgentRunner(Runner):
         """
         session_id = request.session_id
         user_id = request.user_id
+
+
+        # 注入上下文变量
+        current_running_config = RunningConfig(
+            agent_id="default",
+            session_id=session_id,
+            user_id=user_id,
+        )
+        set_running_config(current_running_config)
+
 
         agent = AvatarReactAgent(
             name="Avatar"

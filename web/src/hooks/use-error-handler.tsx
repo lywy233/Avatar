@@ -1,8 +1,10 @@
 import { useEffect, useState, useCallback, createContext, useContext, type ReactNode } from 'react'
 import {
   AlertDialog,
+  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
+  AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
@@ -81,6 +83,9 @@ export function ErrorHandlerProvider({ children }: Props) {
             <AlertDialogTitle>{error.title}</AlertDialogTitle>
             <AlertDialogDescription>{error.message}</AlertDialogDescription>
           </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleClose}>Close</AlertDialogCancel>
+          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </ErrorContext.Provider>
