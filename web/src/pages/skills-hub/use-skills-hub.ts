@@ -1,23 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
+import { fetchSkillsHubDetail, fetchSkillsHubList } from '@/pages/skills-hub/api'
 import {
-  fetchSkillsHubDetail,
-  fetchSkillsHubList,
-} from '@/pages/skills-hub/api'
-import {
-  type SkillsHubFilters,
   type SkillsHubSkillDetail,
   type SkillsHubSkillListItem,
 } from '@/pages/skills-hub/types'
 
 type UseSkillsHubOptions = {
   onError: (title: string, message: string) => void
-}
-
-const EMPTY_FILTERS: SkillsHubFilters = {
-  categories: [],
-  difficulties: [],
-  tags: [],
 }
 
 function matchesSearch(skill: SkillsHubSkillListItem, searchQuery: string) {
@@ -27,11 +17,10 @@ function matchesSearch(skill: SkillsHubSkillListItem, searchQuery: string) {
 
   const normalizedSearch = searchQuery.trim().toLowerCase()
   const searchableText = [
-    skill.title,
-    skill.summary,
-    skill.category,
-    skill.difficulty,
-    ...skill.tags,
+    skill.name,
+    skill.description,
+    skill.metadata.version,
+    ...skill.metadata.tags,
   ]
     .join(' ')
     .toLowerCase()
@@ -41,15 +30,10 @@ function matchesSearch(skill: SkillsHubSkillListItem, searchQuery: string) {
 
 export function useSkillsHub({ onError }: UseSkillsHubOptions) {
   const [skills, setSkills] = useState<SkillsHubSkillListItem[]>([])
-  const [filters, setFilters] = useState<SkillsHubFilters>(EMPTY_FILTERS)
-  const [totalSkills, setTotalSkills] = useState(0)
   const [isListLoading, setIsListLoading] = useState(true)
   const [listError, setListError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState('all')
-  const [selectedDifficulty, setSelectedDifficulty] = useState('all')
-  const [selectedTags, setSelectedTags] = useState<string[]>([])
-  const [selectedSlug, setSelectedSlug] = useState<string | null>(null)
+  const [selectedSkillName, setSelectedSkillName] = useState<string | null>(null)
   const [detailCache, setDetailCache] = useState<Record<string, SkillsHubSkillDetail>>({})
   const [isDetailLoading, setIsDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState<string | null>(null)
@@ -63,17 +47,13 @@ export function useSkillsHub({ onError }: UseSkillsHubOptions) {
 
       try {
         const response = await fetchSkillsHubList(controller.signal, onError)
-        setSkills(response.items)
-        setFilters(response.filters)
-        setTotalSkills(response.total)
+        setSkills(response.skills)
       } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') {
           return
         }
 
         setSkills([])
-        setFilters(EMPTY_FILTERS)
-        setTotalSkills(0)
         setListError(error instanceof Error ? error.message : 'Failed to load the skills catalog.')
       } finally {
         setIsListLoading(false)
@@ -87,58 +67,41 @@ export function useSkillsHub({ onError }: UseSkillsHubOptions) {
     }
   }, [onError])
 
-  const visibleSkills = useMemo(() => {
-    return skills.filter((skill) => {
-      if (!matchesSearch(skill, searchQuery)) {
-        return false
-      }
-
-      if (selectedCategory !== 'all' && skill.category !== selectedCategory) {
-        return false
-      }
-
-      if (selectedDifficulty !== 'all' && skill.difficulty !== selectedDifficulty) {
-        return false
-      }
-
-      if (selectedTags.length > 0 && !selectedTags.every((tag) => skill.tags.includes(tag))) {
-        return false
-      }
-
-      return true
-    })
-  }, [searchQuery, selectedCategory, selectedDifficulty, selectedTags, skills])
+  const visibleSkills = useMemo(
+    () => skills.filter((skill) => matchesSearch(skill, searchQuery)),
+    [searchQuery, skills],
+  )
 
   useEffect(() => {
     if (visibleSkills.length === 0) {
-      setSelectedSlug(null)
+      setSelectedSkillName(null)
       return
     }
 
-    const selectedSkillStillVisible = visibleSkills.some((skill) => skill.slug === selectedSlug)
+    const selectedSkillStillVisible = visibleSkills.some(
+      (skill) => skill.name === selectedSkillName,
+    )
     if (selectedSkillStillVisible) {
       return
     }
 
-    // Keep list and detail panes aligned when filtering removes the current selection.
-    setSelectedSlug(visibleSkills[0].slug)
-  }, [selectedSlug, visibleSkills])
+    setSelectedSkillName(visibleSkills[0].name)
+  }, [selectedSkillName, visibleSkills])
 
   useEffect(() => {
-    if (!selectedSlug) {
+    if (!selectedSkillName) {
       setDetailError(null)
       setIsDetailLoading(false)
       return
     }
 
-    const slugToLoad = selectedSlug
-
-    if (detailCache[slugToLoad]) {
+    if (detailCache[selectedSkillName]) {
       setDetailError(null)
       setIsDetailLoading(false)
       return
     }
 
+    const skillNameToLoad = selectedSkillName
     const controller = new AbortController()
 
     async function loadSkillDetail() {
@@ -146,10 +109,10 @@ export function useSkillsHub({ onError }: UseSkillsHubOptions) {
       setDetailError(null)
 
       try {
-        const detail = await fetchSkillsHubDetail(slugToLoad, controller.signal, onError)
+        const detail = await fetchSkillsHubDetail(skillNameToLoad, controller.signal, onError)
         setDetailCache((currentCache) => ({
           ...currentCache,
-          [slugToLoad]: detail,
+          [skillNameToLoad]: detail,
         }))
       } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') {
@@ -167,32 +130,17 @@ export function useSkillsHub({ onError }: UseSkillsHubOptions) {
     return () => {
       controller.abort()
     }
-  }, [detailCache, onError, selectedSlug])
+  }, [detailCache, onError, selectedSkillName])
 
-  const selectedSkill = selectedSlug ? detailCache[selectedSlug] ?? null : null
-  const selectedListItem = visibleSkills.find((skill) => skill.slug === selectedSlug) ?? null
-
-  const toggleTag = useCallback((tag: string) => {
-    setSelectedTags((currentTags) =>
-      currentTags.includes(tag)
-        ? currentTags.filter((currentTag) => currentTag !== tag)
-        : [...currentTags, tag],
-    )
-  }, [])
-
-  const clearFilters = useCallback(() => {
-    setSearchQuery('')
-    setSelectedCategory('all')
-    setSelectedDifficulty('all')
-    setSelectedTags([])
-  }, [])
+  const selectedSkill = selectedSkillName ? detailCache[selectedSkillName] ?? null : null
+  const selectedListItem =
+    visibleSkills.find((skill) => skill.name === selectedSkillName) ?? null
 
   const reloadSkills = useCallback(async () => {
     setDetailCache({})
-    setSelectedSlug(null)
+    setSelectedSkillName(null)
     setDetailError(null)
     setIsDetailLoading(false)
-
     setIsListLoading(true)
     setListError(null)
 
@@ -200,17 +148,13 @@ export function useSkillsHub({ onError }: UseSkillsHubOptions) {
 
     try {
       const response = await fetchSkillsHubList(controller.signal, onError)
-      setSkills(response.items)
-      setFilters(response.filters)
-      setTotalSkills(response.total)
+      setSkills(response.skills)
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         return
       }
 
       setSkills([])
-      setFilters(EMPTY_FILTERS)
-      setTotalSkills(0)
       setListError(error instanceof Error ? error.message : 'Failed to load the skills catalog.')
     } finally {
       setIsListLoading(false)
@@ -218,21 +162,20 @@ export function useSkillsHub({ onError }: UseSkillsHubOptions) {
   }, [onError])
 
   const reloadSelectedSkill = useCallback(async () => {
-    if (!selectedSlug) {
+    if (!selectedSkillName) {
       return
     }
 
-    const slugToReload = selectedSlug
-
+    const skillNameToReload = selectedSkillName
     const controller = new AbortController()
     setIsDetailLoading(true)
     setDetailError(null)
 
     try {
-      const detail = await fetchSkillsHubDetail(slugToReload, controller.signal, onError)
+      const detail = await fetchSkillsHubDetail(skillNameToReload, controller.signal, onError)
       setDetailCache((currentCache) => ({
         ...currentCache,
-        [slugToReload]: detail,
+        [skillNameToReload]: detail,
       }))
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
@@ -243,32 +186,17 @@ export function useSkillsHub({ onError }: UseSkillsHubOptions) {
     } finally {
       setIsDetailLoading(false)
     }
-  }, [onError, selectedSlug])
-
-  const activeFilterCount =
-    (searchQuery.trim() ? 1 : 0) +
-    (selectedCategory !== 'all' ? 1 : 0) +
-    (selectedDifficulty !== 'all' ? 1 : 0) +
-    selectedTags.length
+  }, [onError, selectedSkillName])
 
   return {
-    filters,
-    totalSkills,
+    totalSkills: skills.length,
     isListLoading,
     listError,
     searchQuery,
     setSearchQuery,
-    selectedCategory,
-    setSelectedCategory,
-    selectedDifficulty,
-    setSelectedDifficulty,
-    selectedTags,
-    toggleTag,
-    clearFilters,
-    activeFilterCount,
     visibleSkills,
-    selectedSlug,
-    setSelectedSlug,
+    selectedSkillName,
+    setSelectedSkillName,
     selectedSkill,
     selectedListItem,
     isDetailLoading,

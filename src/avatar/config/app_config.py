@@ -34,6 +34,11 @@ class AppConfig(BaseSettings):
         description="日志存储地址"
     )
     
+    agent_workspace: Path = Field(
+        default=".avatar/workspace",
+        description="智能体工作空间根地址"
+    )
+    
     log_level: Literal["critical", "error", "warning", "info", "debug"] = Field(
         default="info",
         description="日志等级"
