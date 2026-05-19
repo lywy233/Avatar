@@ -27,8 +27,8 @@ createRoot(document.getElementById('root')!).render(
 
             <Route element={<ProtectedRoute />}>
               <Route path="/" element={<App />} />
-              <Route path="/chat" element={<ChatPage />} />
-              <Route path="/ChatTest" element={<ChatTestPage />} />
+              <Route path="/chat" element={<ChatTestPage />} />
+              <Route path="/ChatTest" element={<ChatPage />} />
               <Route path="/file-system" element={<FileSystemPage />} />
               <Route path="/model-provider" element={<ModelProviderPage />} />
               <Route path="/settings" element={<SettingsPage />} />

@@ -60,7 +60,7 @@ const navigationItems: NavigationItem[] = [
     icon: MessageSquareIcon,
   },
   {
-    title: 'Chat test',
+    title: 'Chat legacy',
     to: '/ChatTest',
     icon: MessageSquareIcon,
   },
@@ -205,8 +205,8 @@ export function AppSidebar({ appVersion }: AppSidebarProps) {
             v{appVersion}
           </Badge>
           <p className="text-xs leading-5 text-sidebar-foreground/70">
-            Official shadcn sidebar primitives now link the home shell, AgentScope chat,
-            Skills Hub, the file-system browser, ChatTest, Settings, model provider
+            Official shadcn sidebar primitives now link the home shell, the local chat UI,
+            Skills Hub, the file-system browser, the legacy AgentScope chat route, Settings, model provider
             configuration, and the sandbox route.
           </p>
         </div>

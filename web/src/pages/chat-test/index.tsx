@@ -22,7 +22,7 @@ import { useErrorHandler } from '@/hooks/use-error-handler'
 
 const appVersion = import.meta.env.VITE_APP_VERSION ?? '0.0.0'
 
-/** Local chat playground page that leaves the existing `/chat` route untouched. */
+/** Primary local chat page used for the main `/chat` route. */
 export default function ChatTestPage() {
   const { showError } = useErrorHandler()
 
@@ -43,7 +43,7 @@ export default function ChatTestPage() {
                 </div>
 
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">Avatar chat test</p>
+                  <p className="truncate text-sm font-semibold">Avatar chat</p>
                   <p className="truncate text-xs text-muted-foreground">
                     Local shadcn/ui + react-markdown runtime UI
                   </p>
@@ -54,7 +54,7 @@ export default function ChatTestPage() {
             <div className="flex items-center gap-2">
               <Badge variant="secondary">v{appVersion}</Badge>
               <Badge variant="outline" className="hidden sm:inline-flex">
-                /ChatTest
+                /chat
               </Badge>
             </div>
           </header>
@@ -68,12 +68,10 @@ export default function ChatTestPage() {
                   </div>
 
                   <div className="flex min-w-0 flex-col gap-1">
-                    <CardTitle>Chat runtime experiment</CardTitle>
+                    <CardTitle>Chat runtime workspace</CardTitle>
                     <CardDescription>
-                      This route keeps the same API contract as{' '}
-                      <code className="rounded bg-muted px-1.5 py-0.5 text-xs">/chat</code>,
-                      but renders a fully local UI with SSE parsing, in-place assistant
-                      updates, regenerate, stop, and browser persistence.
+                      This is the primary chat route and it uses the local UI with SSE parsing,
+                      in-place assistant updates, regenerate, stop, and browser persistence.
                     </CardDescription>
                   </div>
                 </div>

@@ -13,4 +13,4 @@ def set_agent_context(config: RunningConfig):
 
 
 def get_agent_context() -> RunningConfig:
-    return get_running_config
+    return get_running_config()

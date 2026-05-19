@@ -16,6 +16,7 @@ from agentscope_runtime.engine.schemas.agent_schemas import (
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from avatar.agents import AvatarReactAgent
+from avatar.app.middlewares import AgentContextMiddleware
 from ._lifespan import lifespan
 from ._agent_app import agent_app
 from .auth.dependencies import get_current_user
@@ -40,6 +41,11 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["Content-Disposition"],
 )
+
+app.add_middleware(
+    AgentContextMiddleware
+)
+
 
 
 @app.get("/")
@@ -70,7 +76,7 @@ app.include_router(
     agent_app.router,
     prefix="/api/agent",
     dependencies=[Depends(get_current_user)],
-    # tags=["agent"],
+    tags=["agent"],
 )
 
 app.include_router(

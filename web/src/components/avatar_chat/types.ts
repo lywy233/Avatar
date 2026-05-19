@@ -234,6 +234,7 @@ export interface AvatarChatAttachment {
   contentType: string
   size: number
   mediaKind: 'audio' | 'file' | 'image' | 'video'
+  fileUrl?: string | null
 }
 
 /** Supported UI-level chat statuses for local message rendering. */

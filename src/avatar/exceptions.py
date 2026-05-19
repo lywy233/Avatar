@@ -30,3 +30,14 @@ class ProviderError(AgentRuntimeErrorException):
         details: Optional[Dict[str, Any]] = None,
     ) -> None:
         super().__init__("PROVIDER_ERROR", message, details)
+        
+        
+class SkillsError(AgentRuntimeErrorException):
+    """Exception raised for skills management errors."""
+
+    def __init__(
+        self,
+        message: str,
+        details: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        super().__init__("SKILLS_ERROR", message, details)

@@ -35,6 +35,7 @@ export type UploadedMediaAsset = {
   contentType: string
   size: number
   mediaKind: 'audio' | 'file' | 'image' | 'video'
+  fileUrl: string | null
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -93,6 +94,7 @@ function normalizeUploadedMediaAsset(value: unknown): UploadedMediaAsset {
     size: readNumber(record.size) ?? 0,
     mediaKind:
       (readString(record.media_kind) as UploadedMediaAsset['mediaKind'] | undefined) ?? 'file',
+    fileUrl: readString(record.file_url) ?? null,
   }
 }
 
@@ -245,7 +247,7 @@ export async function uploadMediaFile(
   path?: string,
 ): Promise<UploadedMediaAsset> {
   const formData = new FormData()
-  formData.append('file', file)
+  formData.append('file', file, file.name)
   const normalizedPath = path?.trim()
   if (normalizedPath && normalizedPath !== '.') {
     formData.append('path', normalizedPath)

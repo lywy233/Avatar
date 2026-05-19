@@ -66,17 +66,20 @@ export function buildUserRequestInput(
   }
 
   attachments.forEach((attachment) => {
-    const previewUrl = getFileSystemPreviewUrl(attachment.relativePath)
     const downloadUrl = getFileSystemDownloadUrl(attachment.relativePath)
 
     if (attachment.mediaKind === 'image') {
+      const fileUrl = attachment.fileUrl ?? getFileSystemPreviewUrl(attachment.relativePath)
+
       content.push({
         type: AgentScopeRuntimeContentType.Image,
-        image_url: previewUrl,
+        image_url: fileUrl,
         status: AgentScopeRuntimeRunStatus.Created,
       })
       return
     }
+
+    const previewUrl = getFileSystemPreviewUrl(attachment.relativePath)
 
     if (attachment.mediaKind === 'audio') {
       content.push({
@@ -90,9 +93,11 @@ export function buildUserRequestInput(
     }
 
     if (attachment.mediaKind === 'video') {
+      const fileUrl = attachment.fileUrl ?? getFileSystemPreviewUrl(attachment.relativePath)
+
       content.push({
         type: AgentScopeRuntimeContentType.Video,
-        video_url: previewUrl,
+        video_url: fileUrl,
         status: AgentScopeRuntimeRunStatus.Created,
       })
       return

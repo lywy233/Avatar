@@ -1,4 +1,8 @@
-"""运行配置模型定义与持久化。"""
+"""运行配置模型定义与上下文继承
+
+
+这类配置是临时生效的，包含agent id，user id，session id等
+"""
 
 from __future__ import annotations
 

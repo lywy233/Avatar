@@ -12,7 +12,8 @@ from avatar.config import get_app_config
 
 router = APIRouter(tags=["file-system"])
 
-FILENAME_SANITIZER = re.compile(r"[^A-Za-z0-9._-]+")
+FILENAME_SANITIZER = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
+FILENAME_WHITESPACE = re.compile(r"\s+")
 MAX_UPLOAD_SIZE = 20 * 1024 * 1024
 
 class FileUploadResponse(BaseModel):
@@ -21,6 +22,7 @@ class FileUploadResponse(BaseModel):
     content_type: str
     size: int
     media_kind: str
+    file_url: str | None = None
 
 
 class FileSystemEntry(BaseModel):
@@ -57,10 +59,10 @@ async def upload_media_file(
             detail=f"Unable to prepare media directory: {error}",
         ) from error
 
-    safe_filename = sanitize_filename(file.filename)
+    original_content_type = mimetypes.guess_type(file.filename)[0]
+    content_type = original_content_type or file.content_type or "application/octet-stream"
+    safe_filename = sanitize_upload_filename(file.filename, content_type)
     destination = build_upload_destination(resolved_media_dir, safe_filename)
-    guessed_content_type = mimetypes.guess_type(safe_filename)[0]
-    content_type = guessed_content_type or file.content_type or "application/octet-stream"
 
     try:
         total_written = 0
@@ -82,20 +84,24 @@ async def upload_media_file(
     finally:
         await file.close()
 
-    media_root = get_app_config().media_storage_path.resolve()
+    media_root = get_app_config().file_storage_path.resolve()
+
+    relative_path = format_media_relative_path(media_root, destination)
+    media_kind = classify_media_kind(content_type)
 
     return FileUploadResponse(
-        relative_path=format_media_relative_path(media_root, destination),
+        relative_path=relative_path,
         name=safe_filename,
         content_type=content_type,
         size=destination.stat().st_size,
-        media_kind=classify_media_kind(content_type),
+        media_kind=media_kind,
+        file_url=build_file_url(destination),
     )
 
 
 @router.get("/entries", response_model=FileSystemEntriesResponse)
 async def list_file_system_entries(path: str | None = None) -> FileSystemEntriesResponse:
-    media_root = get_app_config().media_storage_path.resolve()
+    media_root = get_app_config().file_storage_path.resolve()
     media_root.mkdir(parents=True, exist_ok=True)
     target_path = resolve_media_entry_path(path)
 
@@ -192,8 +198,28 @@ def sanitize_filename(filename: str) -> str:
     if not base_name:
         return "upload.bin"
 
-    sanitized_name = FILENAME_SANITIZER.sub("_", base_name).strip("._")
+    sanitized_name = FILENAME_SANITIZER.sub("_", base_name)
+    sanitized_name = FILENAME_WHITESPACE.sub(" ", sanitized_name).strip(" .")
     return sanitized_name or "upload.bin"
+
+
+def sanitize_upload_filename(filename: str, content_type: str) -> str:
+    sanitized_name = sanitize_filename(filename)
+    guessed_extension = mimetypes.guess_extension(content_type, strict=False) or ""
+
+    if Path(sanitized_name).suffix:
+        return sanitized_name
+
+    normalized_guess = guessed_extension.lstrip(".").lower()
+    normalized_name = sanitized_name.lower()
+
+    if normalized_guess and normalized_name == normalized_guess:
+        return f"upload.{normalized_guess}"
+
+    if normalized_guess:
+        return f"{sanitized_name}.{normalized_guess}"
+
+    return sanitized_name
 
 
 def build_upload_destination(target_directory: Path, safe_filename: str) -> Path:
@@ -220,7 +246,7 @@ def classify_media_kind(content_type: str) -> str:
 
 
 def resolve_media_entry_path(requested_path: str | None) -> Path:
-    media_root = get_app_config().media_storage_path.resolve()
+    media_root = get_app_config().file_storage_path.resolve()
     candidate_value = "." if requested_path is None or requested_path == "" else requested_path
     candidate = Path(candidate_value)
     if candidate.is_absolute():
@@ -242,7 +268,7 @@ def resolve_media_entry_path(requested_path: str | None) -> Path:
 
 
 def resolve_upload_directory(requested_path: str | None) -> Path:
-    media_root = get_app_config().media_storage_path.resolve()
+    media_root = get_app_config().file_storage_path.resolve()
     media_root.mkdir(parents=True, exist_ok=True)
 
     target_directory = resolve_media_entry_path(requested_path)
@@ -302,3 +328,7 @@ def serialize_file_system_entry(media_root: Path, path: Path) -> FileSystemEntry
 def format_media_relative_path(media_root: Path, path: Path) -> str:
     relative_path = path.relative_to(media_root)
     return "." if relative_path == Path(".") else relative_path.as_posix()
+
+
+def build_file_url(path: Path) -> str:
+    return str(path.resolve())

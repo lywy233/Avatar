@@ -90,14 +90,22 @@ class AppConfig(BaseSettings):
         default=None,
         description="Base URL for an OpenAI-compatible API endpoint, such as a proxy or self-hosted gateway.",
     )
-    model_stream: bool = Field(
-        default=True,
-        description="Whether the default AgentScope chat model should stream responses.",
-    )
-    media_storage_path: Path = Field(
-        default=".avatar/media",
+
+    file_storage_path: Path = Field(
+        # default=".avatar/workspace/media",
+        default=".avatar/workspace",
         description="Default directory used by file upload and preview endpoints when no UI override is saved.",
     )
+     
+    # agents:dict = Field(
+    #     default={
+    #         "default":{
+                
+    #         }
+            
+    #         },
+    #     description="Default directory used by file upload and preview endpoints when no UI override is saved.",
+    # )
 
 @lru_cache(maxsize=1)
 def get_app_config() -> AppConfig:

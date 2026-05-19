@@ -152,7 +152,7 @@ export default function ChatPage() {
                 </div>
 
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">Avatar chat</p>
+                  <p className="truncate text-sm font-semibold">Avatar chat legacy</p>
                   <p className="truncate text-xs text-muted-foreground">AgentScope Runtime WebUI</p>
                 </div>
               </div>
@@ -161,7 +161,7 @@ export default function ChatPage() {
             <div className="flex items-center gap-2">
               <Badge variant="secondary">v{appVersion}</Badge>
               <Badge variant="outline" className="hidden sm:inline-flex">
-                /chat
+                /ChatTest
               </Badge>
             </div>
           </header>
@@ -175,9 +175,9 @@ export default function ChatPage() {
                   </div>
 
                   <div className="flex min-w-0 flex-col gap-1">
-                    <CardTitle>Runtime chat panel</CardTitle>
+                    <CardTitle>Legacy runtime chat panel</CardTitle>
                     <CardDescription>
-                      Requests stream to{' '}
+                      Legacy AgentScope chat requests stream to{' '}
                       <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
                         {agentRuntimeBaseUrl}
                       </code>

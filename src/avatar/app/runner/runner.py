@@ -35,7 +35,7 @@ from agentscope.session import RedisSession
 from agentscope_runtime.engine import AgentApp
 from agentscope_runtime.engine.schemas.agent_schemas import AgentRequest
 from agentscope_runtime.engine.deployers import LocalDeployManager
-from avatar.config.runnning_config import RunningConfig, set_running_config
+from avatar.config.runnning_config import RunningConfig, get_running_config, set_running_config
 
 print("✅ 依赖导入成功")
 
@@ -45,6 +45,9 @@ logger = logging.getLogger(__name__)
 class AgentRunner(Runner):
     def __init__(
         self,
+        agent_id:str|None = None,
+        workspace_dir: Path | None = None,
+        task_tracker: Any | None = None,
     ) -> None:
         super().__init__()
         self.framework_type = "agentscope"
@@ -64,18 +67,19 @@ class AgentRunner(Runner):
         """
         Handle agent query.
         """
-        session_id = request.session_id
-        user_id = request.user_id
+        # session_id = request.session_id
+        # user_id = request.user_id
 
 
-        # 注入上下文变量
-        current_running_config = RunningConfig(
-            agent_id="default",
-            session_id=session_id,
-            user_id=user_id,
-        )
-        set_running_config(current_running_config)
+        # 注入上下文变量 已经在request的时候注入了
+        # current_running_config = RunningConfig(
+        #     agent_id="default",
+        #     session_id=session_id,
+        #     user_id=user_id,
+        # )
+        # set_running_config(current_running_config)
 
+        running_config = get_running_config()
 
         agent = AvatarReactAgent(
             name="Avatar"
@@ -83,8 +87,8 @@ class AgentRunner(Runner):
         agent.set_console_output_enabled(enabled=True)
 
         await self.session.load_session_state(
-            session_id=session_id,
-            user_id=user_id,
+            session_id=running_config.session_id,
+            user_id=running_config.user_id,
             agent=agent,
         )
 
@@ -95,7 +99,7 @@ class AgentRunner(Runner):
             yield msg, last
 
         await self.session.save_session_state(
-            session_id=session_id,
-            user_id=user_id,
+            session_id=running_config.session_id,
+            user_id=running_config.user_id,
             agent=agent,
         )

@@ -36,7 +36,7 @@ const summaryCards = [
   {
     label: 'Routes',
     value: '8 active',
-    hint: 'The homepage shell now links chat, ChatTest, Skills Hub, the file-system browser, Settings, the model provider editor, and the sandbox path.',
+    hint: 'The homepage shell now links the local chat route, the legacy AgentScope chat route, Skills Hub, the file-system browser, Settings, the model provider editor, and the sandbox path.',
   },
 ] as const
 
@@ -165,7 +165,7 @@ function App() {
                     </div>
                     <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
                       <span className="text-sm font-medium">/chat</span>
-                      <Badge variant="outline">AgentScope UI</Badge>
+                      <Badge variant="outline">Local UI</Badge>
                     </div>
                     <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
                       <span className="text-sm font-medium">/test/test1</span>
@@ -173,7 +173,7 @@ function App() {
                     </div>
                     <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
                       <span className="text-sm font-medium">/ChatTest</span>
-                      <Badge variant="outline">Local UI</Badge>
+                      <Badge variant="outline">AgentScope UI</Badge>
                     </div>
                     <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
                       <span className="text-sm font-medium">/skills-hub</span>

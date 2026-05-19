@@ -131,10 +131,11 @@ function UserAttachmentList({ attachments }: { attachments: AvatarChatAttachment
 }
 
 function UserAttachmentItem({ attachment }: { attachment: AvatarChatAttachment }) {
-  const previewUrl = getFileSystemPreviewUrl(attachment.relativePath)
   const downloadUrl = getFileSystemDownloadUrl(attachment.relativePath)
 
   if (attachment.mediaKind === 'image') {
+    const previewUrl = getFileSystemPreviewUrl(attachment.relativePath)
+
     return (
       <a href={previewUrl} rel="noreferrer" target="_blank">
         <img
@@ -145,6 +146,8 @@ function UserAttachmentItem({ attachment }: { attachment: AvatarChatAttachment }
       </a>
     )
   }
+
+  const previewUrl = getFileSystemPreviewUrl(attachment.relativePath)
 
   if (attachment.mediaKind === 'audio') {
     return <audio className="w-full" controls src={previewUrl} />

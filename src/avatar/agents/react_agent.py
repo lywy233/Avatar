@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+import logging
 from typing import Any
 
 from agentscope.agent import ReActAgent
@@ -16,17 +17,12 @@ from avatar.config.runnning_config import get_running_config
 from .model_factory import create_model_and_formatter
 
 ToolFunc = Callable[..., Any]
-
+logger = logging.getLogger(__name__)
 
 class AvatarReactAgent(ReActAgent):
     """Simplified Avatar ReAct agent.
-
-    This implementation keeps the same high-level shape as the reference
-    `CoPawAgent`: it builds a system prompt, prepares a toolkit, and creates
-    an in-memory agent runtime. It intentionally omits skills, hooks, MCP,
-    and advanced memory management for now.
     """
-
+    
     def __init__(
         self,
         name,
@@ -47,7 +43,7 @@ class AvatarReactAgent(ReActAgent):
         # tts_model=None,
         # compression_config=None,
     ):  
-        sys_prompt = "你是一个智能助手。"
+        sys_prompt = self._build_sys_prompt()
         model,formatter = create_model_and_formatter()
         toolkit = Toolkit()
         
@@ -78,5 +74,40 @@ class AvatarReactAgent(ReActAgent):
             # compression_config,
         )
 
+
+    def _build_sys_prompt(self) -> str:
+        """Build system prompt from working dir files and env context.
+
+        Returns:
+            Complete system prompt string
+        """
+
+        return "你是一个Avatar,一个人工智能助手。"
+
+
+    def rebuild_sys_prompt(self) -> None:
+        """
+        重建系统提示词，在load state后执行
+        
+        """
+        self._sys_prompt = self._build_sys_prompt()
+
+        if self.memory is None:
+            logger.warning(
+                "rebuild_sys_prompt: self.memory is None, "
+                "skipping in-memory system prompt update.",
+            )
+            return
+
+        for msg, _marks in self.memory.content:
+            if msg.role == "system":
+                msg.content = self.sys_prompt
+            break
+
+
     async def reply(self, msg=None, structured_model=None):
+        
+        self.rebuild_sys_prompt() # 重建系统提示词，在loadstate之后
+        logger.info(self.memory.content)
+        logger.info(msg)
         return await super().reply(msg, structured_model)
