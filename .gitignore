@@ -114,4 +114,5 @@ reference_codes/
 .avatar/
 .pytest_cache/
 .playwright-mcp/
+
 .codex
