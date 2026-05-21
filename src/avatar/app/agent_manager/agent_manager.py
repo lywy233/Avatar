@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Optional
 
 # from qwenpaw.config.timezone import normalize_tz
-from ...config.user_config import load_config
+from ...config.agent_config import load_agent_config
 
 from .service_manager import ServiceDescriptor, ServiceManager
 from .service_factories import (
@@ -31,10 +31,6 @@ from ..runner.task_tracker import TaskTracker
 # from ..mcp import MCPClientManager
 # from ..crons.manager import CronManager
 # from ..crons.repo.json_repo import JsonJobRepository
-# from ...config.config import load_agent_config
-
-from ...config.user_config import load_agent_config
-
 logger = logging.getLogger(__name__)
 
 
@@ -125,7 +121,7 @@ class AgentManager:
     @property
     def config(self):
         """Get agent configuration."""
-        self._config = load_config(self.agent_id)
+        self._config = load_agent_config(self.agent_id)
         return self._config
 
     def set_manager(self, manager) -> None:

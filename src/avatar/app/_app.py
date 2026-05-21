@@ -24,6 +24,7 @@ from .router.auth_router import router as auth_router
 from .router.file_system_router import router as file_system_router
 from .router.model_provider_router import router as model_provider_router
 from .router.skills_hub_router import router as skills_hub_router
+from .router.user_config_settings_router import router as user_config_settings_router
 
 app = FastAPI(
     lifespan=lifespan,
@@ -99,5 +100,11 @@ app.include_router(
 app.include_router(
     model_provider_router,
     prefix="/api/model-provider",
+    dependencies=[Depends(get_current_user)],
+)
+
+app.include_router(
+    user_config_settings_router,
+    prefix="/api/settings",
     dependencies=[Depends(get_current_user)],
 )

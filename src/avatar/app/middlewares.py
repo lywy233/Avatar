@@ -38,19 +38,19 @@ class AgentContextMiddleware(BaseHTTPMiddleware):
         call_next: RequestResponseEndpoint,
     ) -> Response:
         """Extract agentId from path/header and inject into context."""
-        from ..config import RunningConfig, set_running_config
+        from ..config import RunningConfig, init_running_config
 
         logger = logging.getLogger(__name__)
 
-        init_running_config = RunningConfig(
+        initial_running_config = RunningConfig(
             user_id="default",
             agent_id="default",
             session_id=await self._get_session_id(request),
         )
-        set_running_config(init_running_config)
+        init_running_config(initial_running_config)
 
         logger.debug(
-            f"AgentContextMiddleware: running_config={init_running_config} "
+            f"AgentContextMiddleware: running_config={initial_running_config} "
             f"from path={request.url.path}",
         )
 

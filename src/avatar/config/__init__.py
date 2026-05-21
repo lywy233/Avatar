@@ -10,15 +10,22 @@ from .app_config import AppConfig, get_app_config
 # from .user_config import UserConfig, get_user_config, set_user_config
 from .runnning_config import (
     RunningConfig,
+    RunningConfigManager,
+    build_default_running_config,
     get_running_config,
-    load_persisted_running_config,
-    save_persisted_running_config,
+    get_running_config_manager,
+    init_running_config,
     set_running_config,
+    update_running_config,
 )
 from .agent_config import (
     AgentProfileRef,
     AgentProfileConfig,
     AgentsConfig,
+    AgentConfigManager,
+    get_agent_config_manager,
+    load_agent_config,
+    save_agent_config,
 )
 
 __all__ = [
@@ -28,11 +35,18 @@ __all__ = [
     # "get_user_config",
     # "set_user_config",
     "RunningConfig",
+    "RunningConfigManager",
+    "build_default_running_config",
     "get_running_config",
-    "load_persisted_running_config",
-    "save_persisted_running_config",
+    "get_running_config_manager",
+    "init_running_config",
     "set_running_config",
+    "update_running_config",
     "AgentProfileRef",
     "AgentProfileConfig",
     "AgentsConfig",
+    "AgentConfigManager",
+    "get_agent_config_manager",
+    "load_agent_config",
+    "save_agent_config",
 ]

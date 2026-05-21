@@ -6,87 +6,96 @@
 """
 
 from __future__ import annotations
-import json
+
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .app_config import get_app_config
 from .agent_config import AgentsConfig
+from .app_config import get_app_config
+from .base_config import BaseJsonConfigManager
 
-class UserConfig(BaseModel):
-    """用户级配置信息"""
 
-    model_config = ConfigDict(extra="allow")  # pydantic保留类型，用于存储和绑定
+class UserConfigModel(BaseModel):
+    """用户配置模型。"""
 
-    user_id: str = Field(..., description="用户id,用户的唯一标识")
-    user_name: str = Field(..., description="用户名称,用户的名字")
-    user_type: str = Field(..., description="用户类型，用于区分管理员等权限信息")
-    user_root_path: Path = Field(
-        ..., description="用户工作空间，指定的目录，用户的智能体的工作空间相对于这个地址深入，用于限制用户和模型的可操作范围"
+    model_config = ConfigDict(extra="allow")
+
+    user_id: str = Field(..., description="用户唯一标识。")
+    user_name: str = Field(..., description="用户名称。")
+    user_type: str = Field(default="admin", description="用户类型。")
+    user_root_path: Path = Field(..., description="用户工作空间根目录。")
+    agents: AgentsConfig = Field(
+        default_factory=AgentsConfig,
+        description="用户拥有的智能体配置集合。",
     )
-    agents:AgentsConfig = Field(default_factory=AgentsConfig,description="用户所有的agent 配置信息")
 
 
-def _get_user_config_path(user_id: str) -> Path:
-    """返回指定用户的配置文件路径。"""
-    return get_app_config().root_workspace / "users" / user_id / "config.json"
+class UserConfigManager(BaseJsonConfigManager[UserConfigModel]):
+    """用户配置管理器。
+
+    该管理器基于 ``user_id`` 计算配置文件路径，并提供读取、
+    设置并保存、强制重载等统一能力。
+    """
+
+    def __init__(self, user_id: str) -> None:
+        """初始化用户配置管理器。
+
+        Args:
+            user_id: 用户唯一标识。
+        """
+        super().__init__()
+        self.user_id = user_id
+
+    @property
+    def config_model(self) -> type[UserConfigModel]:
+        """返回当前管理器绑定的配置模型类型。"""
+        return UserConfigModel
+
+    def get_config_path(self) -> Path:
+        """根据 ``user_id`` 计算用户配置文件路径。"""
+        return get_app_config().root_workspace / "users" / self.user_id / "config.json"
+
+    def build_default_config(self) -> UserConfigModel:
+        """构建指定用户的默认配置。"""
+        app_config = get_app_config()
+        return UserConfigModel(
+            user_id=self.user_id,
+            user_name=self.user_id,
+            user_type="admin",
+            user_root_path=app_config.agent_workspace / self.user_id,
+        )
+
+UserConfig = UserConfigModel
+
+
+def get_user_config_manager(user_id: str = "default") -> UserConfigManager:
+    """创建用户配置管理器。
+
+    Args:
+        user_id: 用户唯一标识。
+
+    Returns:
+        对应的用户配置管理器实例。
+    """
+    return UserConfigManager(user_id=user_id)
 
 
 def build_default_user_config(user_id: str = "default") -> UserConfig:
-    """构建默认用户配置。"""
-    app_config = get_app_config()
-    return UserConfig(
-        user_id=user_id,
-        user_name=user_id,
-        user_type="admin",
-        user_root_path=app_config.agent_workspace / user_id,
-    )
+    """构建指定用户的默认配置。"""
+    return get_user_config_manager(user_id).build_default_config()
 
 
 def init_user_config(user_id: str = "default") -> UserConfig:
     """初始化并持久化指定用户的默认配置。"""
-    user_config = build_default_user_config(user_id)
-    return save_user_config(user_id, user_config)
+    return save_user_config(user_id, build_default_user_config(user_id))
 
 
 def save_user_config(user_id: str, user_config: UserConfig) -> UserConfig:
-    """保存用户配置到本地 JSON 文件。"""
-    user_config_path = _get_user_config_path(user_id)
-    user_config_path.parent.mkdir(parents=True, exist_ok=True)
-
-    with user_config_path.open("w", encoding="utf-8") as file:
-        json.dump(
-            user_config.model_dump(mode="json"),
-            file,
-            ensure_ascii=False,
-            indent=2,
-        )
-
-    return user_config
+    """保存用户配置到持久化存储。"""
+    return get_user_config_manager(user_id).save_config(user_config)
 
 
 def load_user_config(user_id: str = "default") -> UserConfig:
-    """从本地 JSON 文件加载用户配置。"""
-    user_config_path = _get_user_config_path(user_id)
-    if not user_config_path.exists():
-        if user_id == "default":
-            return init_user_config(user_id)
-        raise FileNotFoundError(f"User config not found: {user_config_path}")
-
-    with user_config_path.open("r", encoding="utf-8") as file:
-        payload = json.load(file)
-
-    return UserConfig.model_validate(payload)
-
-
-def load_config(user_id: str = "default") -> UserConfig:
-    """兼容旧调用方式，转发到 ``load_user_config``。"""
-    return load_user_config(user_id)
-
-
-
-def load_agent_config(agent_id:str,user_id: str = "default") -> UserConfig:
-    """兼容旧调用方式，转发到 ``load_user_config``。"""
-    return load_user_config(user_id).agents.profiles.get(agent_id)
-
+    """从持久化存储加载用户配置。"""
+    return get_user_config_manager(user_id).load_config()

@@ -21,9 +21,7 @@ from agentscope_runtime.engine.schemas.exception import (
 
 # from .workspace import Workspace
 # from ..config.utils import load_config
-
-
-from avatar.config.user_config import load_config
+from avatar.config.user_config import load_user_config
 from .agent_manager import AgentManager
 logger = logging.getLogger(__name__)
 
@@ -70,7 +68,7 @@ class MultiAgentManager:
                 return self.agents[agent_id]
 
             # Load configuration to get agent reference
-            config = load_config()
+            config = load_user_config()
             print(config)
             if agent_id not in config.agents.profiles:
                 raise ConfigurationException(
@@ -257,7 +255,7 @@ class MultiAgentManager:
         logger.info(f"Reloading agent (zero-downtime): {agent_id}")
 
         # Step 2: Load configuration (outside lock)
-        config = load_config()
+        config = load_user_config()
         if agent_id not in config.agents.profiles:
             logger.error(
                 f"Agent '{agent_id}' not found in configuration "
@@ -426,7 +424,7 @@ class MultiAgentManager:
         Returns:
             dict[str, bool]: Mapping of agent_id to success status
         """
-        config = load_config()
+        config = load_user_config()
         # Filter only enabled agents
         enabled_agents = {
             agent_id: ref

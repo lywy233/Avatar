@@ -12,13 +12,13 @@ following the same broad layering used in QwenPaw:
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Dict, List
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from .app_config import get_app_config
+from .base_config import BaseJsonConfigManager
 
 
 # class ContextCompactConfig(BaseModel):
@@ -231,6 +231,7 @@ class AgentProfileConfig(AgentProfileRef):
     #     description="Runtime behavior configuration.",
     # )
 
+
 class AgentsConfig(BaseModel):
     """Agents configuration (root config.json only contains references)."""
 
@@ -253,3 +254,106 @@ class AgentsConfig(BaseModel):
         description="Agent profile references (ID and workspace path only)",
     )
 
+
+class AgentConfigManager(BaseJsonConfigManager[AgentProfileConfig]):
+    """智能体配置管理器。"""
+
+    def __init__(self, agent_id: str, user_id: str = "default") -> None:
+        """初始化智能体配置管理器。
+
+        Args:
+            agent_id: 智能体唯一标识。
+            user_id: 所属用户唯一标识。
+        """
+        super().__init__()
+        self.agent_id = agent_id
+        self.user_id = user_id
+
+    @property
+    def config_model(self) -> type[AgentProfileConfig]:
+        """返回当前管理器绑定的配置模型类型。"""
+        return AgentProfileConfig
+
+    def get_config_path(self) -> Path:
+        """根据智能体信息计算配置文件路径。"""
+        return self._get_workspace_dir() / "agent.json"
+
+    def build_default_config(self) -> AgentProfileConfig:
+        """构建指定智能体的默认配置。"""
+        agent_ref = self._get_agent_profile_ref()
+        return AgentProfileConfig.model_validate(agent_ref.model_dump(mode="json"))
+
+    def _get_workspace_dir(self) -> Path:
+        """获取智能体工作目录。"""
+        agent_ref = self._get_agent_profile_ref(allow_missing=True)
+        if agent_ref is not None:
+            return Path(agent_ref.workspace_dir)
+
+        from .user_config import load_user_config
+
+        user_config = load_user_config(self.user_id)
+        return user_config.user_root_path / self.agent_id
+
+    def _get_agent_profile_ref(
+        self,
+        allow_missing: bool = False,
+    ) -> AgentProfileRef | None:
+        """从用户配置中读取智能体引用。"""
+        from .user_config import load_user_config, save_user_config
+
+        user_config = load_user_config(self.user_id)
+        agent_ref = user_config.agents.profiles.get(self.agent_id)
+        if agent_ref is not None:
+            return agent_ref
+        if allow_missing:
+            return None
+
+        workspace_dir = user_config.user_root_path / self.agent_id
+        agent_ref = AgentProfileRef(
+            id=self.agent_id,
+            name=self.agent_id,
+            workspace_dir=str(workspace_dir),
+        )
+        user_config.agents.profiles[self.agent_id] = agent_ref
+        if self.agent_id not in user_config.agents.agent_order:
+            user_config.agents.agent_order.append(self.agent_id)
+        save_user_config(self.user_id, user_config)
+        return agent_ref
+
+
+def get_agent_config_manager(
+    agent_id: str,
+    user_id: str = "default",
+) -> AgentConfigManager:
+    """创建智能体配置管理器。"""
+    return AgentConfigManager(agent_id=agent_id, user_id=user_id)
+
+
+def load_agent_config(
+    agent_id: str,
+    user_id: str = "default",
+) -> AgentProfileConfig:
+    """从持久化存储加载智能体配置。"""
+    return get_agent_config_manager(agent_id, user_id).load_config()
+
+
+def save_agent_config(
+    agent_id: str,
+    agent_config: AgentProfileConfig | dict,
+    user_id: str = "default",
+) -> AgentProfileConfig:
+    """保存智能体配置到持久化存储。"""
+    validated_config = get_agent_config_manager(agent_id, user_id).save_config(
+        agent_config,
+    )
+
+    from .user_config import load_user_config, save_user_config
+
+    user_config = load_user_config(user_id)
+    user_config.agents.profiles[agent_id] = AgentProfileRef.model_validate(
+        validated_config.model_dump(mode="json"),
+    )
+    if agent_id not in user_config.agents.agent_order:
+        user_config.agents.agent_order.append(agent_id)
+    save_user_config(user_id, user_config)
+    return validated_config

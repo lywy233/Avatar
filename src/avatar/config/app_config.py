@@ -64,19 +64,7 @@ class AppConfig(BaseSettings):
         le=1440,
         description="Lifetime in minutes for locally issued auth router access tokens.",
     )
-    
-    # TODO running_config 临时存储为json，后续改为数据库存储
-    
-    running_config_path:Path = Field(
-        default=".avatar/running-config.json",
-        description="用于临时存储runningconfig,后续改为可改的内存级配置",
-    )
-
-    user_config_path:Path = Field(
-        default=".avatar/user-config.json",
-        description="用于临时存储用户配置，后续改为可改的数据库内配置",
-    )
-    
+        
     # TODO 下方的后续加入到runningconfig中
     model_name: str = Field(
         default="gpt-4o-mini",
@@ -96,16 +84,6 @@ class AppConfig(BaseSettings):
         default=".avatar/workspace",
         description="Default directory used by file upload and preview endpoints when no UI override is saved.",
     )
-     
-    # agents:dict = Field(
-    #     default={
-    #         "default":{
-                
-    #         }
-            
-    #         },
-    #     description="Default directory used by file upload and preview endpoints when no UI override is saved.",
-    # )
 
 @lru_cache(maxsize=1)
 def get_app_config() -> AppConfig:

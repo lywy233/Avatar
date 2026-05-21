@@ -16,7 +16,7 @@ from ..utils import (
     check_valid_messages,
     get_token_counter,
 )
-from ..agent_context import load_agent_config
+from ...config.agent_config import load_agent_config
 
 if TYPE_CHECKING:
     from ..memory import BaseMemoryManager
