@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -11,10 +13,12 @@ client = TestClient(app)
 
 
 @pytest.fixture(autouse=True)
-def isolate_skills_hub_auth(monkeypatch: pytest.MonkeyPatch):
+def isolate_skills_hub_auth(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("AVATAR_AUTH_ENABLED", "false")
     get_app_config.cache_clear()
     app_config.set(AppConfig())
+    write_skill_fixture(tmp_path, "prompt-optimizer", "Prompt Optimizer")
     yield
     get_app_config.cache_clear()
     app_config.set(AppConfig())
@@ -25,24 +29,12 @@ def test_list_skills_returns_expected_shape() -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["total"] >= 1
-    assert payload["items"]
-    first = payload["items"][0]
-    assert {"id", "slug", "name", "category", "difficulty", "tags"}.issubset(first)
-    assert {"categories", "difficulties", "tags"} == set(payload["filters"])
-
-
-def test_list_skills_supports_filters() -> None:
-    response = client.get(
-        "/api/skills-hub/skills",
-        params={"category": "Operations", "difficulty": "Advanced"},
-    )
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["total"] >= 1
-    assert all(item["category"] == "Operations" for item in payload["items"])
-    assert all(item["difficulty"] == "Advanced" for item in payload["items"])
+    assert payload["skills"]
+    first = payload["skills"][0]
+    assert {"name", "description", "metadata", "skill_dir"}.issubset(first)
+    assert first["name"] == "prompt-optimizer"
+    assert Path(".avatar/skill-hub/skills-manifest.json").is_file()
+    assert Path(".avatar/skill-hub/skills/prompt-optimizer/SKILL.md").is_file()
 
 
 def test_get_skill_detail_returns_full_record() -> None:
@@ -50,9 +42,9 @@ def test_get_skill_detail_returns_full_record() -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["slug"] == "prompt-optimizer"
+    assert payload["name"] == "prompt-optimizer"
     assert payload["description"]
-    assert payload["use_cases"]
+    assert payload["skill_dir"].endswith(".avatar/skill-hub/skills/prompt-optimizer")
 
 
 def test_get_skill_detail_returns_404_for_unknown_slug() -> None:
@@ -60,3 +52,23 @@ def test_get_skill_detail_returns_404_for_unknown_slug() -> None:
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Skill 'does-not-exist' was not found."
+
+
+def write_skill_fixture(tmp_path: Path, skill_name: str, title: str) -> None:
+    skill_dir = tmp_path / ".avatar" / "skill-hub" / "skills" / skill_name
+    skill_dir.mkdir(parents=True, exist_ok=True)
+    (skill_dir / "SKILL.md").write_text(
+        "\n".join(
+            [
+                "---",
+                f"name: {skill_name}",
+                f"description: {title} helps improve prompts.",
+                "---",
+                "",
+                f"# {title}",
+                "",
+                "Use this skill to improve prompt quality.",
+            ],
+        ),
+        encoding="utf-8",
+    )

@@ -38,6 +38,11 @@ class AppConfig(BaseSettings):
         default=".avatar/workspace",
         description="智能体工作空间根地址"
     )
+
+    skill_hub_workspace: Path = Field(
+        default=".avatar/skill-hub",
+        description="技能中心工作空间根地址，包含 skills 目录和 skills-manifest.json"
+    )
     
     log_level: Literal["critical", "error", "warning", "info", "debug"] = Field(
         default="info",

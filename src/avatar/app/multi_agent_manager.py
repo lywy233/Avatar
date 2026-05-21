@@ -13,7 +13,7 @@ agent 关联了什么：workspace，mcp服务，channel服务
 import asyncio
 import logging
 import time
-from typing import Dict, Set
+from typing import Dict, Set, Tuple
 
 from agentscope_runtime.engine.schemas.exception import (
     ConfigurationException,
@@ -40,13 +40,13 @@ class MultiAgentManager:
 
     def __init__(self):
         """Initialize multi-agent manager."""
-        self.agents: Dict[str, AgentManager] = {}
+        self.agents: Dict[Tuple[str, str], AgentManager] = {}
         self._lock = asyncio.Lock()
         self._pending_starts: Dict[str, asyncio.Event] = {}
         self._cleanup_tasks: Set[asyncio.Task] = set()
         logger.debug("MultiAgentManager initialized")
 
-    async def get_agent(self, agent_id: str) -> AgentManager:
+    async def get_agent(self, agent_id: str, user_id: str = "default") -> AgentManager:
         """Get agent workspace by ID (lazy loading).
 
         If workspace doesn't exist in memory, it will be created and started.
@@ -61,15 +61,15 @@ class MultiAgentManager:
         Raises:
             ConfigurationException: If agent ID not found in configuration
         """
+        cache_key = (user_id, agent_id)
         async with self._lock:
             # Return existing agent if already loaded
-            if agent_id in self.agents:
-                logger.debug(f"Returning cached agent: {agent_id}")
-                return self.agents[agent_id]
+            if cache_key in self.agents:
+                logger.debug(f"Returning cached agent: {user_id}/{agent_id}")
+                return self.agents[cache_key]
 
             # Load configuration to get agent reference
-            config = load_user_config()
-            print(config)
+            config = load_user_config(user_id)
             if agent_id not in config.agents.profiles:
                 raise ConfigurationException(
                     config_key="agent",
@@ -87,12 +87,13 @@ class MultiAgentManager:
             instance = AgentManager(
                 agent_id=agent_id,
                 workspace_dir=agent_ref.workspace_dir,
+                user_id=user_id,
             )
 
             try:
                 await instance.start()
                 instance.set_manager(self)  # Set manager reference
-                self.agents[agent_id] = instance
+                self.agents[cache_key] = instance
                 logger.info(f"Workspace created and started: {agent_id}")
                 return instance
             except Exception as e:
@@ -196,7 +197,7 @@ class MultiAgentManager:
                     f"New instance is active and serving requests.",
                 )
 
-    async def stop_agent(self, agent_id: str) -> bool:
+    async def stop_agent(self, agent_id: str, user_id: str = "default") -> bool:
         """Stop a specific agent instance.
 
         Args:
@@ -205,18 +206,19 @@ class MultiAgentManager:
         Returns:
             bool: True if agent was stopped, False if not running
         """
+        cache_key = (user_id, agent_id)
         async with self._lock:
-            if agent_id not in self.agents:
-                logger.warning(f"Agent not running: {agent_id}")
+            if cache_key not in self.agents:
+                logger.warning(f"Agent not running: {user_id}/{agent_id}")
                 return False
 
-            instance = self.agents[agent_id]
+            instance = self.agents[cache_key]
             await instance.stop()
-            del self.agents[agent_id]
-            logger.info(f"Agent stopped and removed: {agent_id}")
+            del self.agents[cache_key]
+            logger.info(f"Agent stopped and removed: {user_id}/{agent_id}")
             return True
 
-    async def reload_agent(self, agent_id: str) -> bool:
+    async def reload_agent(self, agent_id: str, user_id: str = "default") -> bool:
         """Reload a specific agent instance with zero-downtime.
 
         This method performs a seamless reload by:
@@ -242,20 +244,21 @@ class MultiAgentManager:
         Returns:
             bool: True if agent was reloaded, False if not running
         """
+        cache_key = (user_id, agent_id)
         # Step 1: Check if agent exists (quick check with lock)
         async with self._lock:
-            if agent_id not in self.agents:
+            if cache_key not in self.agents:
                 logger.debug(
                     f"Agent not running, will be loaded on next "
-                    f"request: {agent_id}",
+                    f"request: {user_id}/{agent_id}",
                 )
                 return False
-            old_instance = self.agents[agent_id]
+            old_instance = self.agents[cache_key]
 
-        logger.info(f"Reloading agent (zero-downtime): {agent_id}")
+        logger.info(f"Reloading agent (zero-downtime): {user_id}/{agent_id}")
 
         # Step 2: Load configuration (outside lock)
-        config = load_user_config()
+        config = load_user_config(user_id)
         if agent_id not in config.agents.profiles:
             logger.error(
                 f"Agent '{agent_id}' not found in configuration "
@@ -271,11 +274,12 @@ class MultiAgentManager:
         new_instance = AgentManager(
             agent_id=agent_id,
             workspace_dir=agent_ref.workspace_dir,
+            user_id=user_id,
         )
 
         # Step 3.5: Set reusable components from old instance (if any)
         async with self._lock:
-            old_instance = self.agents.get(agent_id)
+            old_instance = self.agents.get(cache_key)
 
         if old_instance:
             # Get all reusable services from old instance's ServiceManager
@@ -310,18 +314,18 @@ class MultiAgentManager:
         # From this point, reload is considered successful
         async with self._lock:
             # Double-check agent still exists
-            if agent_id not in self.agents:
+            if cache_key not in self.agents:
                 logger.warning(
-                    f"Agent {agent_id} was removed during reload, "
+                    f"Agent {user_id}/{agent_id} was removed during reload, "
                     f"stopping new instance",
                 )
                 await new_instance.stop()
                 return False
 
             # Swap instances atomically
-            old_instance = self.agents[agent_id]
-            self.agents[agent_id] = new_instance
-            logger.info(f"Workspace instance replaced: {agent_id}")
+            old_instance = self.agents[cache_key]
+            self.agents[cache_key] = new_instance
+            logger.info(f"Workspace instance replaced: {user_id}/{agent_id}")
 
         # Step 5: Gracefully stop old instance (outside lock)
         # Delegates to helper method to avoid too-many-statements
@@ -366,15 +370,15 @@ class MultiAgentManager:
         await self.cancel_all_cleanup_tasks()
 
         # Create list of agent IDs to avoid modifying dict during iteration
-        agent_ids = list(self.agents.keys())
+        cache_keys = list(self.agents.keys())
 
-        for agent_id in agent_ids:
+        for cache_key in cache_keys:
             try:
-                instance = self.agents[agent_id]
+                instance = self.agents[cache_key]
                 await instance.stop()
-                logger.debug(f"Agent stopped: {agent_id}")
+                logger.debug(f"Agent stopped: {cache_key[0]}/{cache_key[1]}")
             except Exception as e:
-                logger.error(f"Error stopping agent {agent_id}: {e}")
+                logger.error(f"Error stopping agent {cache_key[0]}/{cache_key[1]}: {e}")
 
         self.agents.clear()
         logger.info("All agents stopped")
@@ -385,9 +389,9 @@ class MultiAgentManager:
         Returns:
             list[str]: List of loaded agent IDs
         """
-        return list(self.agents.keys())
+        return [f"{user_id}/{agent_id}" for user_id, agent_id in self.agents.keys()]
 
-    def is_agent_loaded(self, agent_id: str) -> bool:
+    def is_agent_loaded(self, agent_id: str, user_id: str = "default") -> bool:
         """Check if agent is currently loaded.
 
         Args:
@@ -396,9 +400,9 @@ class MultiAgentManager:
         Returns:
             bool: True if agent is loaded and running
         """
-        return agent_id in self.agents
+        return (user_id, agent_id) in self.agents
 
-    async def preload_agent(self, agent_id: str) -> bool:
+    async def preload_agent(self, agent_id: str, user_id: str = "default") -> bool:
         """Preload an agent instance during startup.
 
         Args:
@@ -408,14 +412,14 @@ class MultiAgentManager:
             bool: True if successfully preloaded, False if failed
         """
         try:
-            await self.get_agent(agent_id)
-            logger.info(f"Successfully preloaded agent: {agent_id}")
+            await self.get_agent(agent_id, user_id)
+            logger.info(f"Successfully preloaded agent: {user_id}/{agent_id}")
             return True
         except Exception as e:
-            logger.error(f"Failed to preload agent {agent_id}: {e}")
+            logger.error(f"Failed to preload agent {user_id}/{agent_id}: {e}")
             return False
 
-    async def start_all_configured_agents(self) -> dict[str, bool]:
+    async def start_all_configured_agents(self, user_id: str = "default") -> dict[str, bool]:
         """Start all enabled agents defined in configuration concurrently.
 
         Only agents with enabled=True will be started.
@@ -424,7 +428,7 @@ class MultiAgentManager:
         Returns:
             dict[str, bool]: Mapping of agent_id to success status
         """
-        config = load_user_config()
+        config = load_user_config(user_id)
         # Filter only enabled agents
         enabled_agents = {
             agent_id: ref
@@ -448,7 +452,7 @@ class MultiAgentManager:
             """Start a single agent with error handling."""
             try:
                 logger.info(f"Starting agent: {agent_id}")
-                await self.preload_agent(agent_id)
+                await self.preload_agent(agent_id, user_id)
                 logger.info(f"Agent started successfully: {agent_id}")
                 return (agent_id, True)
             except Exception as e:

@@ -19,7 +19,7 @@ from avatar.agents import AvatarReactAgent
 from avatar.app.middlewares import AgentContextMiddleware
 from ._lifespan import lifespan
 from ._agent_app import agent_app
-from .auth.dependencies import get_current_user
+from .auth.dependencies import get_current_request_context, get_current_user
 from .router.auth_router import router as auth_router
 from .router.file_system_router import router as file_system_router
 from .router.model_provider_router import router as model_provider_router
@@ -76,7 +76,7 @@ async def get_example_agent_request(
 app.include_router(
     agent_app.router,
     prefix="/api/agent",
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(get_current_request_context)],
     tags=["agent"],
 )
 
@@ -88,23 +88,23 @@ app.include_router(
 app.include_router(
     skills_hub_router,
     prefix="/api/skills-hub",
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(get_current_request_context)],
 )
 
 app.include_router(
     file_system_router,
     prefix="/api/file-system",
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(get_current_request_context)],
 )
 
 app.include_router(
     model_provider_router,
     prefix="/api/model-provider",
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(get_current_request_context)],
 )
 
 app.include_router(
     user_config_settings_router,
     prefix="/api/settings",
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(get_current_request_context)],
 )

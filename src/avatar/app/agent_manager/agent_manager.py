@@ -49,7 +49,8 @@ class AgentManager:
 
     def __init__(self, 
                  agent_id: str, 
-                 workspace_dir: str):
+                 workspace_dir: str,
+                 user_id: str = "default"):
         """Initialize agent instance.
 
         Args:
@@ -57,6 +58,7 @@ class AgentManager:
             workspace_dir: Path to agent's workspace directory
         """
         self.agent_id = agent_id
+        self.user_id = user_id
         self.workspace_dir = Path(workspace_dir).expanduser()
         self.workspace_dir.mkdir(parents=True, exist_ok=True)
 
@@ -121,7 +123,7 @@ class AgentManager:
     @property
     def config(self):
         """Get agent configuration."""
-        self._config = load_agent_config(self.agent_id)
+        self._config = load_agent_config(self.agent_id, self.user_id)
         return self._config
 
     def set_manager(self, manager) -> None:
@@ -424,7 +426,7 @@ class AgentManager:
 
         try:
             # 1. Load agent configuration
-            self._config = load_agent_config(self.agent_id)
+            self._config = load_agent_config(self.agent_id, self.user_id)
             logger.debug(f"Loaded config for agent: {self.agent_id}")
 
             # 2. Start all services via ServiceManager

@@ -35,8 +35,8 @@ const summaryCards = [
   },
   {
     label: 'Routes',
-    value: '8 active',
-    hint: 'The homepage shell now links the local chat route, the legacy AgentScope chat route, Skills Hub, the file-system browser, Settings, the model provider editor, and the sandbox path.',
+    value: '7 active',
+    hint: 'The homepage shell now links the local chat route, Skills Hub, the file-system browser, Settings, the model provider editor, and the sandbox path.',
   },
 ] as const
 
@@ -171,10 +171,11 @@ function App() {
                       <span className="text-sm font-medium">/test/test1</span>
                       <Badge variant="outline">Preserved</Badge>
                     </div>
-                    <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
+                    {/* TODO: Chat legacy is hidden temporarily. Remove this card with the legacy route after confirming it is no longer needed. */}
+                    {/* <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
                       <span className="text-sm font-medium">/ChatTest</span>
                       <Badge variant="outline">AgentScope UI</Badge>
-                    </div>
+                    </div> */}
                     <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
                       <span className="text-sm font-medium">/skills-hub</span>
                       <Badge variant="outline">Catalog</Badge>

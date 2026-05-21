@@ -1,3 +1,5 @@
+import { readSelectedAgentId } from '@/lib/agent-selection'
+
 type JsonRecord = Record<string, unknown>
 
 export type AuthenticatedUser = {
@@ -109,6 +111,7 @@ export function isAuthEnabled(): boolean {
 
 export function createAuthHeaders(headers?: HeadersInit, accessToken = readStoredAccessToken()) {
   const nextHeaders = new Headers(headers)
+  nextHeaders.set('X-Agent-ID', readSelectedAgentId())
 
   if (accessToken) {
     nextHeaders.set('Authorization', `Bearer ${accessToken}`)

@@ -1,4 +1,5 @@
 import { authFetch, isAuthEnabled, readStoredAccessToken } from '@/lib/auth-api'
+import { readSelectedAgentId } from '@/lib/agent-selection'
 
 type ErrorHandler = (title: string, message: string) => void
 
@@ -77,9 +78,9 @@ function normalizeSettings(value: unknown): FileSystemSettings {
   const record = isRecord(value) ? value : {}
 
   return {
-    mediaDir: readString(record.media_dir) ?? '.avatar/media',
-    resolvedMediaDir: readString(record.resolved_media_dir) ?? '.avatar/media',
-    defaultMediaDir: readString(record.default_media_dir) ?? '.avatar/media',
+    mediaDir: readString(record.media_dir) ?? '.avatar/workspace/default/default',
+    resolvedMediaDir: readString(record.resolved_media_dir) ?? '.avatar/workspace/default/default',
+    defaultMediaDir: readString(record.default_media_dir) ?? '.avatar/workspace/default/default',
     source: readString(record.source) ?? 'default',
   }
 }
@@ -150,6 +151,7 @@ function buildAuthenticatedPathQuery(path: string | undefined): string {
   if (isAuthEnabled() && accessToken) {
     searchParams.set('access_token', accessToken)
   }
+  searchParams.set('agent_id', readSelectedAgentId())
 
   return `?${searchParams.toString()}`
 }
@@ -190,7 +192,10 @@ export function getFileSystemPreviewUrl(relativePath: string): string {
 }
 
 export function getFileSystemDeleteUrl(relativePath: string): string {
-  const searchParams = new URLSearchParams({ path: relativePath || '.' })
+  const searchParams = new URLSearchParams({
+    path: relativePath || '.',
+    agent_id: readSelectedAgentId(),
+  })
   return `${fileSystemApiBaseUrl}/delete?${searchParams.toString()}`
 }
 

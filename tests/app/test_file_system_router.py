@@ -62,6 +62,44 @@ def test_file_system_routes_allow_authenticated_access_when_enabled(monkeypatch:
 
     assert response.status_code == 200
     assert response.json()["current_path"] == "."
+    assert get_agent_workspace_root("demo-user", "default").exists()
+
+
+def test_file_system_routes_are_scoped_by_agent_header() -> None:
+    default_upload_response = client.post(
+        "/api/file-system/upload",
+        files={"file": ("default.txt", b"default workspace", "text/plain")},
+    )
+    agent_upload_response = client.post(
+        "/api/file-system/upload",
+        headers={"X-Agent-ID": "research"},
+        files={"file": ("research.txt", b"research workspace", "text/plain")},
+    )
+
+    assert default_upload_response.status_code == 200
+    assert agent_upload_response.status_code == 200
+    assert (get_agent_workspace_root("default", "default") / "default.txt").read_bytes() == b"default workspace"
+    assert (get_agent_workspace_root("default", "research") / "research.txt").read_bytes() == b"research workspace"
+
+    default_entries = client.get("/api/file-system/entries").json()["entries"]
+    research_entries = client.get(
+        "/api/file-system/entries",
+        headers={"X-Agent-ID": "research"},
+    ).json()["entries"]
+
+    assert [entry["name"] for entry in default_entries] == ["default.txt"]
+    assert [entry["name"] for entry in research_entries] == ["research.txt"]
+
+
+def test_file_system_returns_user_agent_relative_root() -> None:
+    response = client.get("/api/file-system/entries", headers={"X-Agent-ID": "research"})
+    settings_response = client.get("/api/file-system/settings", headers={"X-Agent-ID": "research"})
+
+    assert response.status_code == 200
+    assert response.json()["root_path"] == ".avatar/workspace/default/research"
+    assert settings_response.status_code == 200
+    assert settings_response.json()["media_dir"] == ".avatar/workspace/default/research"
+    assert settings_response.json()["default_media_dir"] == ".avatar/workspace/default/research"
 
 
 def test_file_preview_accepts_query_access_token_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -99,6 +137,7 @@ def test_upload_and_preview_file_uses_configured_media_dir() -> None:
     assert payload["name"] == "demo.txt"
     assert payload["media_kind"] == "file"
     assert payload["relative_path"] == "demo.txt"
+    assert payload["file_url"] is None
 
     stored_file = get_default_media_root() / payload["relative_path"]
     assert stored_file.read_bytes() == b"hello avatar"
@@ -181,7 +220,7 @@ def test_list_entries_returns_root_directory_contents() -> None:
     payload = response.json()
     assert payload["current_path"] == "."
     assert payload["parent_path"] is None
-    assert payload["root_path"] == "."
+    assert payload["root_path"] == ".avatar/workspace/default/default"
     assert payload["entry_count"] == 2
     assert [entry["name"] for entry in payload["entries"]] == ["nested", "alpha.txt"]
     assert payload["entries"][0]["entry_type"] == "directory"
@@ -203,6 +242,30 @@ def test_list_entries_returns_nested_directory_contents() -> None:
     assert payload["entry_count"] == 1
     assert payload["entries"][0]["name"] == "inside.txt"
     assert payload["entries"][0]["relative_path"] == "nested/inside.txt"
+
+
+def test_list_entries_accepts_current_workspace_prefixed_path() -> None:
+    nested_dir = get_default_media_root() / "nested"
+    nested_dir.mkdir(parents=True, exist_ok=True)
+    (nested_dir / "inside.txt").write_text("inside", encoding="utf-8")
+
+    response = client.get(
+        "/api/file-system/entries",
+        params={"path": ".avatar/workspace/default/default/nested"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["current_path"] == "nested"
+
+
+def test_list_entries_rejects_other_workspace_prefixed_path() -> None:
+    response = client.get(
+        "/api/file-system/entries",
+        params={"path": ".avatar/workspace/default/other-agent"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Requested path must stay within the current user's agent workspace."
 
 
 def test_list_entries_rejects_path_outside_media_root() -> None:
@@ -306,4 +369,8 @@ def get_working_directory() -> Path:
 
 
 def get_default_media_root() -> Path:
-    return get_working_directory() / ".avatar" / "media"
+    return get_agent_workspace_root("default", "default")
+
+
+def get_agent_workspace_root(user_id: str, agent_id: str) -> Path:
+    return get_working_directory() / ".avatar" / "workspace" / user_id / agent_id

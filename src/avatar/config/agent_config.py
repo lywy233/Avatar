@@ -21,6 +21,11 @@ from .app_config import get_app_config
 from .base_config import BaseJsonConfigManager
 
 
+def build_agent_workspace_dir(user_id: str, agent_id: str) -> Path:
+    """Build the canonical workspace path for a user's agent."""
+    return get_app_config().agent_workspace / user_id / agent_id
+
+
 # class ContextCompactConfig(BaseModel):
 #     """Configuration for context compaction behavior."""
 
@@ -248,7 +253,7 @@ class AgentsConfig(BaseModel):
             "default": AgentProfileRef(
                 id="default",
                 name="default",
-                workspace_dir=f"{get_app_config().agent_workspace}/default",
+                workspace_dir=str(build_agent_workspace_dir("default", "default")),
             ),
         },
         description="Agent profile references (ID and workspace path only)",
@@ -292,7 +297,7 @@ class AgentConfigManager(BaseJsonConfigManager[AgentProfileConfig]):
         from .user_config import load_user_config
 
         user_config = load_user_config(self.user_id)
-        return user_config.user_root_path / self.agent_id
+        return build_agent_workspace_dir(self.user_id, self.agent_id)
 
     def _get_agent_profile_ref(
         self,
@@ -308,7 +313,7 @@ class AgentConfigManager(BaseJsonConfigManager[AgentProfileConfig]):
         if allow_missing:
             return None
 
-        workspace_dir = user_config.user_root_path / self.agent_id
+        workspace_dir = build_agent_workspace_dir(self.user_id, self.agent_id)
         agent_ref = AgentProfileRef(
             id=self.agent_id,
             name=self.agent_id,

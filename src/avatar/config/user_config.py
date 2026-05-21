@@ -11,7 +11,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .agent_config import AgentsConfig
+from .agent_config import AgentProfileRef, AgentsConfig, build_agent_workspace_dir
 from .app_config import get_app_config
 from .base_config import BaseJsonConfigManager
 
@@ -64,7 +64,35 @@ class UserConfigManager(BaseJsonConfigManager[UserConfigModel]):
             user_name=self.user_id,
             user_type="admin",
             user_root_path=app_config.agent_workspace / self.user_id,
+            agents=AgentsConfig(
+                profiles={
+                    "default": AgentProfileRef(
+                        id="default",
+                        name="default",
+                        workspace_dir=str(build_agent_workspace_dir(self.user_id, "default")),
+                    ),
+                },
+            ),
         )
+
+    def load_config(self) -> UserConfigModel:
+        """Load user config and normalize agent workspace paths."""
+        user_config = super().load_config()
+        normalized_config = self._normalize_workspace_paths(user_config)
+        if normalized_config != user_config:
+            return self.save_config(normalized_config)
+        return user_config
+
+    def _normalize_workspace_paths(self, user_config: UserConfigModel) -> UserConfigModel:
+        """Keep persisted user and agent paths on the canonical workspace tree."""
+        normalized_config = user_config.model_copy(deep=True)
+        app_config = get_app_config()
+        normalized_config.user_root_path = app_config.agent_workspace / self.user_id
+
+        for agent_id, agent_ref in normalized_config.agents.profiles.items():
+            agent_ref.workspace_dir = str(build_agent_workspace_dir(self.user_id, agent_id))
+
+        return normalized_config
 
 UserConfig = UserConfigModel
 

@@ -8,7 +8,8 @@ from pathlib import Path
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from avatar.config import get_app_config
+from avatar.config import get_app_config, get_running_config
+from avatar.config.agent_config import build_agent_workspace_dir
 
 router = APIRouter(tags=["file-system"])
 
@@ -41,6 +42,27 @@ class FileSystemEntriesResponse(BaseModel):
     entry_count: int
     entries: list[FileSystemEntry]
 
+
+class FileSystemSettingsResponse(BaseModel):
+    media_dir: str
+    resolved_media_dir: str
+    default_media_dir: str
+    source: str
+
+
+@router.get("/settings", response_model=FileSystemSettingsResponse)
+async def get_file_system_settings() -> FileSystemSettingsResponse:
+    """Return the current request's agent workspace root."""
+    media_root = get_current_agent_workspace_root()
+    media_root.mkdir(parents=True, exist_ok=True)
+    media_root_label = format_project_relative_path(media_root)
+    return FileSystemSettingsResponse(
+        media_dir=media_root_label,
+        resolved_media_dir=str(media_root.resolve()),
+        default_media_dir=media_root_label,
+        source="agent-workspace",
+    )
+
 @router.post("/upload", response_model=FileUploadResponse)
 async def upload_media_file(
     file: UploadFile = File(...),
@@ -49,7 +71,8 @@ async def upload_media_file(
     if not file.filename:
         raise HTTPException(status_code=400, detail="Uploaded file must have a filename.")
 
-    resolved_media_dir = resolve_upload_directory(path)
+    media_root = get_current_agent_workspace_root()
+    resolved_media_dir = resolve_upload_directory(media_root, path)
 
     try:
         resolved_media_dir.mkdir(parents=True, exist_ok=True)
@@ -84,8 +107,6 @@ async def upload_media_file(
     finally:
         await file.close()
 
-    media_root = get_app_config().file_storage_path.resolve()
-
     relative_path = format_media_relative_path(media_root, destination)
     media_kind = classify_media_kind(content_type)
 
@@ -95,15 +116,15 @@ async def upload_media_file(
         content_type=content_type,
         size=destination.stat().st_size,
         media_kind=media_kind,
-        file_url=build_file_url(destination),
+        file_url=None,
     )
 
 
 @router.get("/entries", response_model=FileSystemEntriesResponse)
 async def list_file_system_entries(path: str | None = None) -> FileSystemEntriesResponse:
-    media_root = get_app_config().file_storage_path.resolve()
+    media_root = get_current_agent_workspace_root()
     media_root.mkdir(parents=True, exist_ok=True)
-    target_path = resolve_media_entry_path(path)
+    target_path = resolve_media_entry_path(media_root, path)
 
     if not target_path.exists():
         raise HTTPException(status_code=404, detail="Requested path was not found.")
@@ -117,7 +138,7 @@ async def list_file_system_entries(path: str | None = None) -> FileSystemEntries
     return FileSystemEntriesResponse(
         current_path=current_path,
         parent_path=parent_path,
-        root_path=".",
+        root_path=format_project_relative_path(media_root),
         entry_count=len(entries),
         entries=entries,
     )
@@ -125,7 +146,7 @@ async def list_file_system_entries(path: str | None = None) -> FileSystemEntries
 
 @router.get("/download")
 async def download_file_system_entry(path: str) -> FileResponse:
-    target_path = resolve_media_entry_path(path)
+    target_path = resolve_media_entry_path(get_current_agent_workspace_root(), path)
 
     if not target_path.exists():
         raise HTTPException(status_code=404, detail="Requested path was not found.")
@@ -142,7 +163,7 @@ async def download_file_system_entry(path: str) -> FileResponse:
 
 @router.get("/preview")
 async def preview_file_system_entry(path: str) -> FileResponse:
-    target_path = resolve_media_entry_path(path)
+    target_path = resolve_media_entry_path(get_current_agent_workspace_root(), path)
 
     if not target_path.exists():
         raise HTTPException(status_code=404, detail="Requested path was not found.")
@@ -159,7 +180,7 @@ async def preview_file_system_entry(path: str) -> FileResponse:
 
 @router.delete("/delete")
 async def delete_file_system_entry(path: str) -> dict[str, str]:
-    target_path = resolve_media_entry_path(path)
+    target_path = resolve_media_entry_path(get_current_agent_workspace_root(), path)
 
     if not target_path.exists():
         raise HTTPException(status_code=404, detail="Requested path was not found.")
@@ -191,6 +212,15 @@ def resolve_media_dir(media_dir: str) -> Path:
         ) from error
 
     return resolved_candidate
+
+
+def get_current_agent_workspace_root() -> Path:
+    """Resolve the workspace root for the current user and selected agent."""
+    running_config = get_running_config()
+    return build_agent_workspace_dir(
+        user_id=running_config.user_id,
+        agent_id=running_config.agent_id,
+    ).expanduser().resolve()
 
 
 def sanitize_filename(filename: str) -> str:
@@ -245,9 +275,9 @@ def classify_media_kind(content_type: str) -> str:
     return "file"
 
 
-def resolve_media_entry_path(requested_path: str | None) -> Path:
-    media_root = get_app_config().file_storage_path.resolve()
-    candidate_value = "." if requested_path is None or requested_path == "" else requested_path
+def resolve_media_entry_path(media_root: Path, requested_path: str | None) -> Path:
+    media_root = media_root.resolve()
+    candidate_value = normalize_requested_media_path(media_root, requested_path)
     candidate = Path(candidate_value)
     if candidate.is_absolute():
         raise HTTPException(
@@ -267,11 +297,36 @@ def resolve_media_entry_path(requested_path: str | None) -> Path:
     return resolved_candidate
 
 
-def resolve_upload_directory(requested_path: str | None) -> Path:
-    media_root = get_app_config().file_storage_path.resolve()
+def normalize_requested_media_path(media_root: Path, requested_path: str | None) -> str:
+    """Normalize incoming paths to workspace-relative paths only."""
+    candidate_value = "." if requested_path is None or requested_path == "" else requested_path
+    if not candidate_value or candidate_value == ".":
+        return "."
+
+    project_relative_root = format_project_relative_path(media_root)
+    normalized_candidate = candidate_value.replace("\\", "/").removeprefix("./")
+
+    if normalized_candidate == project_relative_root:
+        return "."
+    if normalized_candidate.startswith(f"{project_relative_root}/"):
+        stripped_candidate = normalized_candidate.removeprefix(f"{project_relative_root}/")
+        return stripped_candidate or "."
+
+    agent_workspace_root = format_project_relative_path(get_app_config().agent_workspace)
+    if normalized_candidate == agent_workspace_root or normalized_candidate.startswith(f"{agent_workspace_root}/"):
+        raise HTTPException(
+            status_code=400,
+            detail="Requested path must stay within the current user's agent workspace.",
+        )
+
+    return candidate_value
+
+
+def resolve_upload_directory(media_root: Path, requested_path: str | None) -> Path:
+    media_root = media_root.resolve()
     media_root.mkdir(parents=True, exist_ok=True)
 
-    target_directory = resolve_media_entry_path(requested_path)
+    target_directory = resolve_media_entry_path(media_root, requested_path)
     if target_directory == media_root:
         return media_root
 
@@ -330,5 +385,14 @@ def format_media_relative_path(media_root: Path, path: Path) -> str:
     return "." if relative_path == Path(".") else relative_path.as_posix()
 
 
-def build_file_url(path: Path) -> str:
-    return str(path.resolve())
+def format_project_relative_path(path: Path) -> str:
+    """Format a path relative to the project root for safe UI display."""
+    resolved_path = path.expanduser().resolve()
+    project_root = Path.cwd().resolve()
+
+    try:
+        relative_path = resolved_path.relative_to(project_root)
+    except ValueError:
+        return resolved_path.as_posix()
+
+    return f"./{relative_path.as_posix()}".removeprefix("./")

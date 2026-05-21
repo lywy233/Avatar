@@ -5,7 +5,7 @@ import {
   Settings2Icon,
   UserRoundIcon,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { AppSidebar } from '@/components/app-sidebar'
 import { Badge } from '@/components/ui/badge'
@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/sidebar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { useAgentSelection } from '@/hooks/use-agent-selection'
 import { useAuth } from '@/hooks/use-auth'
 import { useErrorHandler } from '@/hooks/use-error-handler'
 
@@ -46,16 +47,6 @@ function isRecord(value: unknown): value is JsonRecord {
 
 function formatJson(value: unknown): string {
   return JSON.stringify(value, null, 2)
-}
-
-function extractAgentIds(config: JsonRecord, currentAgentId: string): string[] {
-  const profiles = isRecord(config.agents) && isRecord(config.agents.profiles)
-    ? config.agents.profiles
-    : {}
-
-  const profileAgentIds = Object.keys(profiles)
-  const nextAgentIds = new Set<string>(['default', currentAgentId, ...profileAgentIds].filter(Boolean))
-  return Array.from(nextAgentIds)
 }
 
 function parseJsonEditorValue(value: string, label: string): JsonRecord {
@@ -131,10 +122,9 @@ function ConfigEditor({
 export default function SettingsPage() {
   const { showError } = useErrorHandler()
   const { authEnabled, user } = useAuth()
+  const { refreshAgentCatalog, selectedAgentId } = useAgentSelection()
 
   const [activeSection, setActiveSection] = useState<SettingsSection>('user')
-  const [selectedAgentId, setSelectedAgentId] = useState('default')
-  const [agentIds, setAgentIds] = useState<string[]>(['default'])
   const [userConfigText, setUserConfigText] = useState('{}')
   const [agentConfigText, setAgentConfigText] = useState('{}')
   const [isUserConfigLoading, setIsUserConfigLoading] = useState(true)
@@ -143,24 +133,19 @@ export default function SettingsPage() {
 
   const currentUsername = authEnabled ? (user?.username ?? 'Loading...') : 'default'
 
-  async function loadUserConfig(signal?: AbortSignal) {
+  const loadUserConfig = useCallback(async (signal?: AbortSignal) => {
     setIsUserConfigLoading(true)
     try {
       const config = await fetchUserConfig(signal, showError)
       setUserConfigText(formatJson(config))
-
-      const nextAgentIds = extractAgentIds(config, selectedAgentId)
-      setAgentIds(nextAgentIds)
-      if (!nextAgentIds.includes(selectedAgentId)) {
-        setSelectedAgentId(nextAgentIds[0] ?? 'default')
-      }
+      await refreshAgentCatalog(config, signal)
       return config
     } finally {
       setIsUserConfigLoading(false)
     }
-  }
+  }, [refreshAgentCatalog, showError])
 
-  async function loadAgentConfig(agentId: string, signal?: AbortSignal) {
+  const loadAgentConfig = useCallback(async (agentId: string, signal?: AbortSignal) => {
     setIsAgentConfigLoading(true)
     try {
       const config = await fetchAgentConfig(agentId, signal, showError)
@@ -169,7 +154,7 @@ export default function SettingsPage() {
     } finally {
       setIsAgentConfigLoading(false)
     }
-  }
+  }, [showError])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -187,7 +172,7 @@ export default function SettingsPage() {
     })()
 
     return () => controller.abort()
-  }, [])
+  }, [loadUserConfig])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -205,7 +190,7 @@ export default function SettingsPage() {
     })()
 
     return () => controller.abort()
-  }, [selectedAgentId])
+  }, [loadAgentConfig, selectedAgentId])
 
   async function handleReloadUserConfig() {
     try {
@@ -230,14 +215,8 @@ export default function SettingsPage() {
       const payload = parseJsonEditorValue(userConfigText, 'User config')
       const savedConfig = await updateUserConfig(payload, showError)
       setUserConfigText(formatJson(savedConfig))
-
-      const nextAgentIds = extractAgentIds(savedConfig, selectedAgentId)
-      setAgentIds(nextAgentIds)
-      const nextAgentId = nextAgentIds.includes(selectedAgentId)
-        ? selectedAgentId
-        : (nextAgentIds[0] ?? 'default')
-      setSelectedAgentId(nextAgentId)
-      await loadAgentConfig(nextAgentId)
+      const nextAgentIds = await refreshAgentCatalog(savedConfig)
+      await loadAgentConfig(nextAgentIds.includes(selectedAgentId) ? selectedAgentId : (nextAgentIds[0] ?? 'default'))
       setStatusMessage('User config saved.')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to save user config.'
@@ -251,7 +230,7 @@ export default function SettingsPage() {
       const payload = parseJsonEditorValue(agentConfigText, 'Agent config')
       const savedConfig = await updateAgentConfig(selectedAgentId, payload, showError)
       setAgentConfigText(formatJson(savedConfig))
-      await loadUserConfig()
+      await refreshAgentCatalog()
       setStatusMessage(`Agent config saved for "${selectedAgentId}".`)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to save agent config.'
@@ -289,25 +268,10 @@ export default function SettingsPage() {
                       <UserRoundIcon className="size-3.5" />
                       User: {currentUsername}
                     </Badge>
-
-                    <div className="flex items-center gap-2 rounded-lg border bg-card px-3 py-1.5">
-                      <BotIcon className="size-4 text-muted-foreground" />
-                      <label htmlFor="settings-agent-select" className="text-xs text-muted-foreground">
-                        Agent
-                      </label>
-                      <select
-                        id="settings-agent-select"
-                        value={selectedAgentId}
-                        onChange={(event) => setSelectedAgentId(event.target.value)}
-                        className="min-w-32 bg-transparent text-sm outline-none"
-                      >
-                        {agentIds.map((agentId) => (
-                          <option key={agentId} value={agentId}>
-                            {agentId}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    <Badge variant="outline" className="gap-1">
+                      <BotIcon className="size-3.5" />
+                      Agent: {selectedAgentId}
+                    </Badge>
                   </div>
                 </div>
               </div>
